@@ -53,9 +53,10 @@ description: "Task list for 001-hierarchical-runtime-dag Phase 0 baseline"
 - [ ] T021 [P] Reconcile `docs/specs/SPEC-001.md` to point at `specs/001-hierarchical-runtime-dag/spec.md` (redirect note)
 - [ ] T022 Update `docs/CURRENT_STATE.md` to Phase 0 complete (incl. status, next task)
 - [ ] T023 [P] Full `pytest tests/` green (brain 5 + secret 6 + new contract/integration)
-- [ ] T024 **STOP** — cross-document consistency review (constitution ↔ spec ↔ models ↔ fixtures)
+- [x] T024 **STOP** — cross-document consistency review — ✅ **PASS 2026-08-23** (dual-verified: Cline planner + SpecForge verifier · report: `reviews/T024-consistency-review.md` · W1–W5 non-blocking)
+- [ ] T025 [P] Normalization pass (W1–W4): constitution §4.2 field names → contract names (`evidence_shard_ids`, `finding_ids`, `supporting_evidence`, `conflicting_evidence`, `action_id`, `validated_situation_id`); reword `causality_assessment` → "result recorded in `causality_status`" (data-model L119, plan L26, constitution §4.3); fix spec.md L34 heading backtick; unify fixture provenance key → `ingested_at`; reconcile T019 filename (`test_escalation_run.py` → `test_fixture_run.py`). **DEADLINE: before T200 (Phase 2 code-gen).** [W5 `missing_domains` vocabulary → design input for T500]
 
-**Checkpoint**: Phase 0 complete — STOP for review before Phase 1.
+**Checkpoint**: Phase 0 complete — review gate **CLOSED 2026-08-23** (T024 PASS). Phase 1 unblocked.
 
 ## Phases 1–6 (gated later — implement after review)
 
