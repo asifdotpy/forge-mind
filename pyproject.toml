@@ -1,0 +1,20 @@
+[project]
+name = "forge-mind"
+version = "0.1.0"
+description = "Hierarchical Multi-Agent Cognitive Operating System"
+readme = "docs/PROJECT.md"
+requires-python = ">=3.11"
+dependencies = [
+    "chromadb>=0.5.0",
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "ggshield>=1.53.0",
+]
