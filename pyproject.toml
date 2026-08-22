@@ -17,6 +17,7 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "ggshield>=1.53.0",
+    "specify-cli>=1.0.1",
 ]
 
 [tool.pytest.ini_options]
