@@ -1,41 +1,37 @@
 # Current State
 
-## Phase: Cognitive Memory & Embedded Knowledge Brain Setup
+## Phase: Phase 0 COMPLETE — Spec-Kit Baseline (awaiting review gate before Phase 1)
+
+## Status (verified 2026-08-22)
+
+- **Git baseline**: 7 conventional commits on `main` (pre-Phase-0), clean tree before this phase; no remote configured.
+- **Secret hygiene**: Notion token removed from source AND history (verified `git log -S` + blob scan); ggshield 1.53.0 pre-commit hook active (`.githooks/pre-commit`, `core.hooksPath=.githooks`).
 
 ## Working
-- Workspace initialized at `/home/asif1/forge-mind`.
-- Verified Cloud APIs:
-  - Tavily Search API (Active)
-  - Exa Neural Search API (Active)
-  - Jina Reader API (Zero-overhead markdown extraction)
-  - Notion API & Notion MCP Server (`notion-mcp-server`) connected to *ForgeMind Command Center*.
-- Project Operating Rules established in `AGENTS.md`.
-- External Cognitive Memory layout established in `docs/`.
-- **Embedded Local Knowledge Brain (ChromaDB + ONNX MiniLM)**:
-  - Ingested & indexed entire ForgeMind v3.0 Notion Knowledge Base (30 pages, 368 context-enriched semantic chunks).
-  - Sync Script: `scripts/sync_notion_brain.py` (recursive tree crawler, contextual retrieval prefixing, sliding window overlap, rich metadata taxonomy).
-  - Query Interface: `scripts/query_brain.py` (metadata filtering by `doc_type`, `page`, similarity scoring, JSON output).
-  - Automated tests passing: `pytest tests/test_knowledge_brain.py` (5/5 tests passing).
-- **Secrets hygiene (2026-08-22)**:
-  - Hardcoded Notion token removed from `scripts/sync_notion_brain.py`; token is now read from `NOTION_TOKEN` env var (gitignored `.env`) with fail-fast error.
-  - ggshield pre-commit hook wired via `git config core.hooksPath .githooks` (blocks commits containing secrets).
-  - Regression tests added: `tests/test_secret_handling.py` (9/9 tests passing total).
+- **Spec-Kit Phase 0 scaffold COMPLETE** under `specs/001-hierarchical-runtime-dag/`:
+  - `spec.md` (canonical, migrated from `docs/specs/SPEC-001.md`), `research.md`, `data-model.md` (9 artifacts), `plan.md` (Phases 0-6, M1-M3, DoD), `tasks.md` (T001-T024 + gated T100-T600).
+  - `contracts/` — 9 JSON Schema (draft-07) contracts: event, coverage-plan, evidence-shard, domain-finding, validated-situation, decision-record, proposed-action, action-validation, escalation.
+- **Fixtures**: `fixtures/inputs/FIXTURE-001-happy-path.json`, `FIXTURE-002-escalation.json` (Event envelopes w/ payload) + `fixtures/expected/*-expected.json` assertion sets.
+- **Scaffold**: `src/forgemind/` importable; `scripts/run_fixture.py` (validates Event schema + expected-artifact coverage; works standalone and batch).
+- **Tests**: `tests/contract/test_contracts.py` (5), `tests/integration/test_fixture_run.py` (4).
+- **Toolchain**: `pyproject.toml` + `jsonschema` dep, pytest `pythonpath=["src"]`, dev deps consolidated in `[dependency-groups]`; `uv lock`/`uv sync` green.
+- **Docs reconciled**: `docs/specs/SPEC-001.md` now a redirect stub; pointers updated in `AGENTS.md`, `docs/specs/README.md`, `.specify/constitution.md` (canonical spec home = `specs/<feature>/`).
 
-## In Progress
-- Spec-Kit setup (`.specify/` configuration & v3.0 Constitution).
-- Formalizing `SPEC-001: Hierarchical Engineering Agent Runtime DAG`.
-- `docs/specs/SPEC-001.md` authored from Notion `BUILD-001` + `SPEC-001`.
+## Verification (this phase)
+- `pytest tests/` = **20 passed** (knowledge-brain 5, secret-handling 6, contracts 5, integration 4).
+- `PYTHONPATH=src python -c "import forgemind"` = OK (SC-004).
+- `python scripts/run_fixture.py` (batch) and `... FIXTURE-001-happy-path.json` (single) = exit 0, 0 errors (SC-003).
+- Fixture naming follows Notion/BUILD-001 canonical convention (`FIXTURE-001-happy-path.json`, `FIXTURE-002-escalation.json`).
 
 ## Next Task
-- Initialize `spec-kit` / `.specify/` configuration and generate `SPEC-001` from Notion `BUILD-001`.
+1. Commit Phase 0 baseline (ggshield-gated, granular conventional commits).
+2. **STOP for review** (SPEC-001 stop condition) before Phase 1 — Contracts & Event Acquisition.
+3. Phase 1+ per `specs/001-hierarchical-runtime-dag/plan.md` (T100+ in tasks.md).
 
 ## Known Issues / Blockers
-- None.
+- No remote configured yet (push deferred until user provides remote).
+- Runtime tiers NOT implemented (Phase 0 gate) — downstream artifacts exist as contracts + expected assertions only, by design.
 
 ## Last Verified
-- **Date**: 2026-08-21
-- **Verification**: `pytest tests/test_knowledge_brain.py` and semantic query verification via `scripts/query_brain.py`.
-- **Result**: All 5 tests passed; semantic retrieval, contract filtering, and ADK/BUILD plan queries validated.
-
-
-
+- **Date**: 2026-08-22
+- **Verification**: pytest 20/20; fixture runner exit 0 (batch + single); package import OK; secret-history scan clean.

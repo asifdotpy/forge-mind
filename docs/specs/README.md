@@ -1,5 +1,7 @@
 # Specifications (docs/specs/)
 
+> **⚠️ Location change (2026-08-22):** Canonical specifications now live in **`specs/<feature>/`** at the repository root, following the Spec-Kit convention (e.g. `specs/001-hierarchical-runtime-dag/`). This directory retains only legacy pointers (see [`SPEC-001.md`](SPEC-001.md)) and this lifecycle note.
+
 This directory contains formal feature and component specifications for ForgeMind.
 
 ## Specification Lifecycle

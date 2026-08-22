@@ -3,7 +3,7 @@
 ## Before modifying code
 
 1. Read docs/CURRENT_STATE.md
-2. Identify the relevant SPEC in docs/specs/.
+2. Identify the relevant SPEC in `specs/<feature>/` (canonical; e.g. `specs/001-hierarchical-runtime-dag/`). Legacy pointers live in `docs/specs/`.
 3. Check docs/ARCHITECTURE.md for component boundaries.
 4. Do not guess unresolved architectural decisions (check docs/decisions/).
 

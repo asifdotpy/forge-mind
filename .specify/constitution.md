@@ -2,8 +2,8 @@
 
 ## 1. Core Operating Philosophy & Authority Model
 - **Notion Knowledge Base**: Authoritative source for system vision, architectural intent, Architecture Decision Records (ADRs), and high-level boundaries.
-- **Spec-Kit & Repository (`docs/specs/`)**: Authoritative source for executable specifications, canonical data models, JSON Schema contracts, test fixtures, implementation plans, and atomic task graphs.
-- **Spec-Driven Engineering**: No agent or application code shall be written without an approved, verified specification in `docs/specs/`.
+- **Spec-Kit & Repository (`specs/<feature>/`, e.g. `specs/001-hierarchical-runtime-dag/`)**: Authoritative source for executable specifications, canonical data models, JSON Schema contracts, test fixtures, implementation plans, and atomic task graphs.
+- **Spec-Driven Engineering**: No agent or application code shall be written without an approved, verified specification in `specs/<feature>/`.
 
 ## 2. Five-Tier Hierarchical DAG Architecture
 Execution flows strictly downward along the five-tier Directed Acyclic Graph. Cyclical dependencies between agents are strictly prohibited.
