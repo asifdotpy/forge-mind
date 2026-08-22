@@ -375,6 +375,13 @@ class NotionCrawler:
             return
         self.visited_ids.add(page_id)
 
+        # --- BOUNDARY ENFORCEMENT ---
+        # Only allow pages within the ForgeMind boundary
+        from forgemind_boundary import is_in_scope, BoundaryViolationError, FORGEMIND_ROOT_PAGE_ID
+        if not is_in_scope(page_id):
+            print(f"  ⚠️ SKIPPING (out of scope): {page_id}", flush=True)
+            return
+
         info = get_page_info(page_id, self.token)
         title = info["title"]
         current_hierarchy = f"{hierarchy_path} > {title}" if hierarchy_path else title
