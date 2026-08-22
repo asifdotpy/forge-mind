@@ -7,14 +7,17 @@ requires-python = ">=3.11"
 dependencies = [
     "chromadb>=0.5.0",
     "requests>=2.31.0",
+    "jsonschema>=4.0.0",
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-]
+# Optional extras (none currently). Dev tooling lives in [dependency-groups].
 
 [dependency-groups]
 dev = [
+    "pytest>=8.0.0",
     "ggshield>=1.53.0",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
