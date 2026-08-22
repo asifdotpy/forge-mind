@@ -1,0 +1,21 @@
+#!/bin/sh
+# Git pre-commit hook: block commits that contain secrets (via ggshield).
+# Wire it up with: git config core.hooksPath .githooks
+
+set -e
+
+# Prefer a project-local install, fall back to the system PATH.
+GGSHIELD_BIN=""
+if command -v ggshield >/dev/null 2>&1; then
+    GGSHIELD_BIN="$(command -v ggshield)"
+elif [ -x ".venv/bin/ggshield" ]; then
+    GGSHIELD_BIN=".venv/bin/ggshield"
+fi
+
+if [ -z "$GGSHIELD_BIN" ]; then
+    echo "ggshield not found — skipping secret scan." >&2
+    echo "Install it with: uv sync --extra dev  (or: pip install ggshield)" >&2
+    exit 0
+fi
+
+exec "$GGSHIELD_BIN" secret scan pre-commit

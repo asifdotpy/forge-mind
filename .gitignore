@@ -1,0 +1,13 @@
+.venv/
+node_modules/
+*.log
+.env
+.env.*.local
+.brain_db/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+
+# Added by ggshield
+.cache_ggshield
