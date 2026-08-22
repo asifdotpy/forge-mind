@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://forgemind.dev/specs/escalation.schema.json",
+  "title": "Escalation",
+  "type": "object",
+  "required": [
+    "escalation_id",
+    "situation_id",
+    "reason",
+    "summary",
+    "required_human_role",
+    "evidence_ids"
+  ],
+  "properties": {
+    "escalation_id": { "type": "string", "pattern": "^ESC-[A-Za-z0-9-]+$" },
+    "situation_id": { "type": "string", "pattern": "^SIT-[A-Za-z0-9-]+$" },
+    "reason": {
+      "type": "string",
+      "enum": ["uncertainty", "risk", "coverage_gap", "policy_boundary", "validation_failure"]
+    },
+    "summary": { "type": "string" },
+    "required_human_role": { "type": "string" },
+    "evidence_ids": { "type": "array", "items": { "type": "string" } }
+  }
+}

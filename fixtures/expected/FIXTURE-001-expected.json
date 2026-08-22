@@ -1,0 +1,92 @@
+{
+  "fixture_id": "FIXTURE-001",
+  "kind": "expected-assertions",
+  "version": "3.0",
+  "assertions": [
+    {
+      "artifact": "Event",
+      "schema": "contracts/event.schema.json",
+      "checks": [
+        "event_id == EVT-1000",
+        "situation_id == SIT-1000",
+        "type == pr",
+        "source == fixture",
+        "timestamp is ISO-8601",
+        "payload contains scenario data"
+      ]
+    },
+    {
+      "artifact": "CoveragePlan",
+      "schema": "contracts/coverage-plan.schema.json",
+      "checks": [
+        "produced by Tier 1 Engineering Supervisor",
+        "references situation_id SIT-1000",
+        "selected_domains is a subset of [code, delivery, production]",
+        "execution_trace_id is present",
+        "provenance intact"
+      ]
+    },
+    {
+      "artifact": "EvidenceShard",
+      "schema": "contracts/evidence-shard.schema.json",
+      "checks": [
+        "emitted by Tier 3 worker with worker name",
+        "has observations[] and claims[]",
+        "confidence 0..1",
+        "uncertainties[] preserved"
+      ]
+    },
+    {
+      "artifact": "DomainFinding",
+      "schema": "contracts/domain-finding.schema.json",
+      "checks": [
+        "aggregates evidence_shard_ids only within its own domain",
+        "references situation_id SIT-1000"
+      ]
+    },
+    {
+      "artifact": "ValidatedSituation",
+      "schema": "contracts/validated-situation.schema.json",
+      "checks": [
+        "produced by Tier 4 Cross-Lifecycle Validator",
+        "causality_status in [unsupported, correlated, supported, verified]",
+        "supporting/conflicting evidence listed",
+        "coverage present"
+      ]
+    },
+    {
+      "artifact": "DecisionRecord",
+      "schema": "contracts/decision-record.schema.json",
+      "checks": [
+        "produced by Tier 5 Decision Reducer",
+        "references exactly one validated_situation_id",
+        "autonomy_class in [safe_autonomous, human_review, escalate]"
+      ]
+    },
+    {
+      "artifact": "ProposedAction",
+      "schema": "contracts/proposed-action.schema.json",
+      "checks": [
+        "references decision_id",
+        "status == proposed",
+        "required_authority present"
+      ]
+    },
+    {
+      "artifact": "ActionValidation",
+      "schema": "contracts/action-validation.schema.json",
+      "checks": [
+        "policy_result in [allowed, requires_human, rejected]",
+        "validated_at ISO-8601",
+        "handles action_id"
+      ]
+    },
+    {
+      "artifact": "Terminal",
+      "checks": [
+        "NO Escalation for happy-path fixture",
+        "outcome == resolved"
+      ]
+    }
+  ]
+}

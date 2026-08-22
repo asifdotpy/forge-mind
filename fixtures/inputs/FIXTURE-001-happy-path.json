@@ -1,0 +1,37 @@
+{
+  "fixture_id": "FIXTURE-001",
+  "name": "Event-envelope happy path",
+  "version": "3.0",
+  "purpose": "Canonical Event-envelope happy path for Phase 0 contract validation.",
+  "event": {
+    "event_id": "EVT-1000",
+    "situation_id": "SIT-1000",
+    "type": "pr",
+    "source": "fixture",
+    "summary": "PR #245 previously-validated low-risk code change with full lifecycle coverage",
+    "timestamp": "2026-08-21T09:00:00Z",
+    "reference": "https://github.com/example/forge-mind/pull/245",
+    "affected_entities": ["auth-service", "config"],
+    "provenance": {
+      "ingested_by": "forgemind-spec-kit",
+      "ingestion_time": "2026-08-21T09:00:01Z",
+      "source_system": "fixture-harness"
+    },
+    "payload": {
+      "scenario": "happy-path",
+      "pr_head_sha": "abcd1234",
+      "changed_files": ["auth/config.go", "auth/controller.go"],
+      "ci_outcome": "pass",
+      "deployment_target": "staging"
+    }
+  },
+  "expected_artifacts": [
+    "CoveragePlan",
+    "EvidenceShard",
+    "DomainFinding",
+    "ValidatedSituation",
+    "DecisionRecord",
+    "ProposedAction",
+    "ActionValidation"
+  ]
+}

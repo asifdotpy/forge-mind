@@ -1,0 +1,79 @@
+{
+  "fixture_id": "FIXTURE-002",
+  "kind": "expected-assertions",
+  "version": "3.0",
+  "assertions": [
+    {
+      "artifact": "Event",
+      "schema": "contracts/event.schema.json",
+      "checks": [
+        "event_id == EVT-2000",
+        "situation_id == SIT-2000",
+        "type == incident",
+        "source == fixture",
+        "timestamp is ISO-8601"
+      ]
+    },
+    {
+      "artifact": "CoveragePlan",
+      "schema": "contracts/coverage-plan.schema.json",
+      "checks": [
+        "produced by Tier 1 Engineering Supervisor",
+        "references situation_id SIT-2000",
+        "multi-domain (code, delivery, production) coverage due to incident"
+      ]
+    },
+    {
+      "artifact": "EvidenceShard",
+      "schema": "contracts/evidence-shard.schema.json",
+      "checks": [
+        "emitted per domain with citations",
+        "high uncertainty / critical risk in at least one shard"
+      ]
+    },
+    {
+      "artifact": "DomainFinding",
+      "schema": "contracts/domain-finding.schema.json",
+      "checks": [
+        "one finding per covered domain",
+        "conflicts captured if present"
+      ]
+    },
+    {
+      "artifact": "ValidatedSituation",
+      "schema": "contracts/validated-situation.schema.json",
+      "checks": [
+        "produced by Tier 4",
+        "missing_domains MUST include [documentation, security] explicitly",
+        "causality_status conservative (not verified without proof)",
+        "uncertainties[] non-empty"
+      ]
+    },
+    {
+      "artifact": "DecisionRecord",
+      "schema": "contracts/decision-record.schema.json",
+      "checks": [
+        "autonomy_class == escalate OR human_review",
+        "requires_human == true",
+        "references validated_situation_id"
+      ]
+    },
+    {
+      "artifact": "Escalation",
+      "schema": "contracts/escalation.schema.json",
+      "checks": [
+        "produced instead of autonomous action",
+        "reason in [uncertainty, risk, coverage_gap, policy_boundary, validation_failure]",
+        "required_human_role present",
+        "evidence_ids[] preserved"
+      ]
+    },
+    {
+      "artifact": "Terminal",
+      "checks": [
+        "outcome == escalated",
+        "NO autonomous action executed"
+      ]
+    }
+  ]
+}

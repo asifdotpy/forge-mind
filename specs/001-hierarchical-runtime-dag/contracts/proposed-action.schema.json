@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://forgemind.dev/specs/proposed-action.schema.json",
+  "title": "ProposedAction",
+  "type": "object",
+  "required": [
+    "action_id",
+    "decision_id",
+    "action",
+    "risk_level",
+    "required_authority",
+    "status"
+  ],
+  "properties": {
+    "action_id": { "type": "string", "pattern": "^ACT-[A-Za-z0-9-]+$" },
+    "decision_id": { "type": "string", "pattern": "^DR-[A-Za-z0-9-]+$" },
+    "action": { "type": "string" },
+    "risk_level": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+    "required_authority": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["proposed", "validated", "rejected", "executed", "escalated"]
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://forgemind.dev/schemas/event.schema.json",
+  "title": "Event",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "event_id",
+    "situation_id",
+    "type",
+    "source",
+    "summary",
+    "timestamp",
+    "reference",
+    "affected_entities",
+    "provenance"
+  ],
+  "properties": {
+    "event_id": { "type": "string", "pattern": "^EVT-[A-Za-z0-9-]+$" },
+    "situation_id": { "type": "string", "pattern": "^SIT-[A-Za-z0-9-]+$" },
+    "type": {
+      "type": "string",
+      "enum": ["pr", "ci_failure", "deployment", "incident", "notification", "documentation", "security"]
+    },
+    "source": {
+      "type": "string",
+      "enum": ["github", "ci", "monitoring", "fixture"]
+    },
+    "summary": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "reference": { "type": "string" },
+    "affected_entities": { "type": "array", "items": { "type": "string" } },
+    "payload": { "type": "object" },
+    "provenance": { "type": "object" }
+  }
+}

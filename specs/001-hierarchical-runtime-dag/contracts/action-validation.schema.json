@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://forgemind.dev/specs/action-validation.schema.json",
+  "title": "ActionValidation",
+  "type": "object",
+  "required": [
+    "validation_id",
+    "action_id",
+    "policy_result",
+    "checks",
+    "reason",
+    "validated_at"
+  ],
+  "properties": {
+    "validation_id": { "type": "string", "pattern": "^AV-[A-Za-z0-9-]+$" },
+    "action_id": { "type": "string", "pattern": "^ACT-[A-Za-z0-9-]+$" },
+    "policy_result": {
+      "type": "string",
+      "enum": ["allowed", "requires_human", "rejected"]
+    },
+    "checks": { "type": "array", "items": { "type": "object" } },
+    "reason": { "type": "string" },
+    "validated_at": { "type": "string", "format": "date-time" }
+  }
+}

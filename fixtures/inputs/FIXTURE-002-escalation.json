@@ -1,0 +1,31 @@
+{
+  "fixture_id": "FIXTURE-002",
+  "name": "Event-envelope escalation path",
+  "version": "3.0",
+  "purpose": "Canonical Event-envelope escalation (uncertainty / high risk) for Phase 0 contract validation.",
+  "event": {
+    "event_id": "EVT-2000",
+    "situation_id": "SIT-2000",
+    "type": "incident",
+    "source": "fixture",
+    "summary": "Elevated authentication errors following deployment; multi-domain uncertainty requires human decision",
+    "timestamp": "2026-08-21T10:00:00Z",
+    "reference": "https://github.com/example/org/monitoring/incidents/2000",
+    "affected_entities": ["auth-service", "edge-gateway"],
+    "provenance": {
+      "ingested_at": "2026-08-21T10:00:01Z",
+      "source_system": "fixture-harness",
+      "correlated_signals": 3
+    },
+    "payload": {
+      "scenario": "escalation",
+      "deployment": "staging",
+      "error_rate_pct": 12.5,
+      "affected_domains": ["code", "delivery", "production"],
+      "missing_domains": ["documentation", "security"],
+      "high_uncertainty": true,
+      "risk_level": "critical"
+    }
+  },
+  "expected_artifacts": ["Escalation"]
+}
