@@ -1,0 +1,59 @@
+{
+  "fixture_id": "FIXTURE-004",
+  "name": "Tier 3 specialist workers dispatch",
+  "version": "3.0",
+  "purpose": "Provides per-worker context across the three lifecycle domains so the Phase-4 fixture runner can emit durable EvidenceShards with provenance and boundary guards.",
+  "event": {
+    "event_id": "EVT-4000",
+    "situation_id": "SIT-4000",
+    "type": "incident",
+    "source": "fixture",
+    "summary": "Elevated auth errors after a staging deployment; multi-domain worker investigation",
+    "timestamp": "2026-08-22T12:00:00Z",
+    "reference": "https://github.com/example/org/monitoring/incidents/4000",
+    "affected_entities": ["auth-service", "edge-gateway"],
+    "provenance": {
+      "ingested_at": "2026-08-22T12:00:01Z",
+      "source_system": "fixture-harness",
+      "correlated_signals": 3
+    },
+    "payload": {
+      "scenario": "workers",
+      "deployment": "staging",
+      "affected_domains": ["code", "delivery", "production"]
+    }
+  },
+  "workers": {
+    "pr-pre-flight-ast-worker": {
+      "domain": "code",
+      "inputs": {
+        "changed_files": ["auth/controller.go", "auth/config.go"]
+      },
+      "confidence": 0.85,
+      "risk_level": "medium",
+      "affected_entities": ["auth-service"],
+      "uncertainties": ["caller-graph coverage is partial"]
+    },
+    "build-log-and-flakiness-worker": {
+      "domain": "delivery",
+      "inputs": {
+        "ci_outcome": "pass"
+      },
+      "confidence": 0.8,
+      "risk_level": "high",
+      "affected_entities": ["edge-gateway"],
+      "uncertainties": ["flakiness baseline unavailable for this suite"]
+    },
+    "telemetry-correlation-worker": {
+      "domain": "production",
+      "inputs": {
+        "telemetry_signals": [12.5, 4.2, 6.1]
+      },
+      "confidence": 0.68,
+      "risk_level": "critical",
+      "affected_entities": ["auth-service", "edge-gateway"],
+      "uncertainties": ["correlation does not establish causation without Tier 4 review"]
+    }
+  },
+  "expected_artifacts": ["Event", "CoveragePlan", "EvidenceShard"]
+}

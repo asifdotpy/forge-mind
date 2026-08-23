@@ -1,0 +1,45 @@
+{
+  "fixture_id": "FIXTURE-004",
+  "kind": "expected-assertions",
+  "version": "3.0",
+  "assertions": [
+    {
+      "artifact": "Event",
+      "schema": "contracts/event.schema.json",
+      "checks": [
+        "event_id == EVT-4000",
+        "situation_id == SIT-4000",
+        "provenance intact",
+        "timestamp is ISO-8601"
+      ]
+    },
+    {
+      "artifact": "CoveragePlan",
+      "schema": "contracts/coverage-plan.schema.json",
+      "checks": [
+        "produced by Tier 1 Engineering Supervisor",
+        "selected_domains == [code, delivery, production]",
+        "selected_workers cover all three domains"
+      ]
+    },
+    {
+      "artifact": "EvidenceShard",
+      "schema": "contracts/evidence-shard.schema.json",
+      "checks": [
+        "one shard per dispatched worker",
+        "emitted by a Tier 3 worker with worker name",
+        "confidence 0..1",
+        "provenance references event_id EVT-4000, coverage_plan_id, execution_trace_id",
+        "uncertainties[] preserved",
+        "no DomainFinding / ValidatedSituation / DecisionRecord artifact"
+      ]
+    },
+    {
+      "artifact": "Terminal",
+      "checks": [
+        "Tier 3 workers emitted EvidenceShards with provenance and no decisions",
+        "no worker spawned sub-workers or reconciled cross-domain evidence"
+      ]
+    }
+  ]
+}
