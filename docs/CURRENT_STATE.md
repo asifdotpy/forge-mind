@@ -61,32 +61,38 @@ forge-mind/
 ├── fixtures/
 │   ├── inputs/
 │   │   ├── FIXTURE-001-happy-path.json
-│   │   └── FIXTURE-002-escalation.json
+│   │   ├── FIXTURE-002-escalation.json
+│   │   ├── FIXTURE-003-domain-evidence.json # all-3-domain EvidenceShards (drives Tier 2)
+│   │   └── FIXTURE-004-workers.json         # per-worker context (drives Tier 3)
 │   └── expected/
 │       ├── FIXTURE-001-expected.json
-│       └── FIXTURE-002-expected.json
+│       ├── FIXTURE-002-expected.json
+│       ├── FIXTURE-003-expected.json
+│       └── FIXTURE-004-expected.json
 ├── src/forgemind/
-│   ├── __init__.py                    # Package exports (paths + acquisition + supervisor + domain managers)
+│   ├── __init__.py                    # Package exports (paths + acquisition + supervisor + domain managers + workers)
 │   ├── _paths.py                      # Canonical path constants
 │   ├── acquisition.py                 # Phase 1 event acquisition pipeline
 │   ├── supervisor.py                  # Phase 2 Tier 1 supervisor
-│   └── domain_managers.py             # Phase 3 Tier 2 domain managers
+│   ├── domain_managers.py             # Phase 3 Tier 2 domain managers
+│   └── workers.py                     # Phase 4 Tier 3 specialist workers
 ├── scripts/
 │   ├── sync_notion_brain.py           # Notion → ChromaDB sync (with boundary enforcement)
 │   ├── query_brain.py                 # ChromaDB semantic query interface
-│   ├── run_fixture.py                 # Phase 3 fixture validator (acquisition + CoveragePlan + SupervisorDispatch + DomainFinding)
+│   ├── run_fixture.py                 # Phase 4 fixture validator (acquisition + CoveragePlan + SupervisorDispatch + DomainFinding + EvidenceShard)
 │   └── forgemind_boundary.py          # Boundary definition + enforcement
 ├── tests/
 │   ├── contract/test_contracts.py     # 5 tests
 │   ├── contract/test_event_acquisition.py # 19 Phase 1 tests
 │   ├── contract/test_supervisor.py    # 18 Phase 2 tests
 │   ├── contract/test_domain_managers.py # 15 Phase 3 tests
+│   ├── contract/test_workers.py       # 18 Phase 4 tests
 │   ├── integration/test_fixture_run.py # 4 tests
 │   ├── test_knowledge_brain.py        # 5 tests
 │   └── test_secret_handling.py        # 6 tests
 ├── docs/
 │   ├── CURRENT_STATE.md               # This file
-│   ├── FAILURE_LOG.md                 # Empty (no failures yet)
+│   ├── FAILURE_LOG.md                 # Failure log & institutional memory (FAIL-001..FAIL-004)
 │   ├── ARCHITECTURE.md                # v3.0 architecture reference
 │   ├── PROJECT.md                     # Project vision
 │   └── decisions/                     # Decision records directory
@@ -100,8 +106,9 @@ forge-mind/
 |--------|-------|
 | Working tree | Clean |
 | Branch | `main` tracking `origin/main` |
-| Commits | 15 conventional commits; local HEAD == remote HEAD (`4c51f00`) |
+| Commits | 25 conventional commits; local HEAD == remote HEAD (`02be84a`) |
 | Baseline commits (2026-08-23) | boundary enforcement, specify-cli dev dep, specforge protocol doc, CURRENT_STATE refresh, LICENSE+README |
+| Runtime phase commits (2026-08-23) | T100 acquisition · T200 supervisor · T300 domain managers · T400 workers · tiers wiring · CURRENT_STATE refresh · FAIL-004 advisory triage |
 
 ### 2.3 GitHub Remote (NEW — 2026-08-23)
 
@@ -147,8 +154,8 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 |----|-------------|--------|----------|
 | FR-001 | Event validation against schema | PASS | `test_all_fixtures_validate_against_event_schema` + `test_fixture_001_event_is_schema_valid` |
 | FR-002 | CoveragePlan emission | PASS | `acquire_event()` emits schema-valid CoveragePlan |
-| FR-003 | Bounded EvidenceShard emission | SPECIFIED | `evidence-shard.schema.json` exists |
-| FR-004 | Domain-bounded aggregation | SPECIFIED | `domain-finding.schema.json` exists |
+| FR-003 | Bounded EvidenceShard emission | PASS | `workers.py` emits schema-valid EvidenceShards (`test_each_worker_emits_schema_valid_shard`); bounded-domain guard `WorkerError` on cross-domain context |
+| FR-004 | Domain-bounded aggregation | PASS | `domain_managers.py` aggregates only within its own domain (`DomainError` on cross-domain evidence; `test_cross_domain_evidence_raises_domain_manager_error`) |
 | FR-005 | ValidatedSituation with coverage gaps | SPECIFIED | `validated-situation.schema.json` exists |
 | FR-006 | DecisionRecord/ProposedAction | SPECIFIED | `decision-record.schema.json`, `proposed-action.schema.json` exist |
 | FR-007 | ActionValidation enforcement | SPECIFIED | `action-validation.schema.json` exists |
@@ -159,7 +166,7 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 
 | ID | Criterion | Status | Evidence |
 |----|-----------|--------|----------|
-| SC-001 | `pytest tests/contract/` passes | PASS | 24/24 passed (5 baseline + 19 Phase 1) |
+| SC-001 | `pytest tests/contract/` passes | PASS | 75/75 passed (5 baseline + 19 Phase 1 + 18 Phase 2 + 15 Phase 3 + 18 Phase 4) |
 | SC-002 | `pytest tests/integration/` passes | PASS | 4/4 passed |
 | SC-003 | Fixture-001 exits 0, matches expected | PASS | `run_fixture.py` → 0 errors |
 | SC-004 | `src/forgemind` importable | PASS | `import forgemind` succeeds |
@@ -169,8 +176,8 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 
 | Story | Priority | Status |
 |-------|----------|--------|
-| US1: Route inbound Event into CoveragePlan | P1 | Phase 1 COMPLETE |
-| US2: Evidence to ValidatedSituation | P1 | Phases 3-5 (gated) |
+| US1: Route inbound Event into CoveragePlan | P1 | Phase 2 COMPLETE |
+| US2: Evidence to ValidatedSituation | P1 | Phases 3-4 COMPLETE; Phase 5 gated |
 | US3: Decide, propose, validate, or escalate | P2 | Phase 6 (gated) |
 
 ---
@@ -182,10 +189,10 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 | Phase | Scope | Exit Criteria | Status |
 |-------|-------|---------------|--------|
 | **Phase 0** | Repository skeleton + Spec-Kit baseline | Structural contract validity + package importability + cross-doc review; STOP for review | **COMPLETE** |
-| **Phase 1** | Contracts & Event Acquisition | One event accepted as durable, schema-valid artifact | GATED |
-| **Phase 2** | Tier 1 Supervisor | Trace shows Supervisor → selected Managers + coverage decision | GATED |
-| **Phase 3** | Tier 2 Domain Managers | Concurrent manager execution; no cross-domain reconciliation | GATED |
-| **Phase 4** | Tier 3 Workers | Durable EvidenceShards with provenance; no decisions | GATED |
+| **Phase 1** | Contracts & Event Acquisition | One event accepted as durable, schema-valid artifact | **COMPLETE** (T100) |
+| **Phase 2** | Tier 1 Supervisor | Trace shows Supervisor → selected Managers + coverage decision | **COMPLETE** (T200) |
+| **Phase 3** | Tier 2 Domain Managers | Concurrent manager execution; no cross-domain reconciliation | **COMPLETE** (T300) |
+| **Phase 4** | Tier 3 Workers | Durable EvidenceShards with provenance; no decisions | **COMPLETE** (T400) |
 | **Phase 5** | Tier 4 Validator | Multi-domain ValidatedSituations reconstructible | GATED |
 | **Phase 6** | Tier 5 Reducer + ActionValidation + Escalation | No final action bypasses validation | GATED |
 
@@ -193,7 +200,7 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 
 | Milestone | Description | Status |
 |-----------|-------------|--------|
-| **M1** | FIXTURE-001 passes through five-tier hierarchy locally | GATED (Phase 0 complete, runtime tiers not implemented) |
+| **M1** | FIXTURE-001 passes through five-tier hierarchy locally | GATED (Phases 1–4 complete; Tier 4 Validator + Tier 5 Reducer pending) |
 | **M2** | FIXTURE-001 passes through deployed Google Cloud application | GATED |
 | **M3** | Judge-visible surface proves provenance, validation, uncertainty, human control | GATED |
 
@@ -213,17 +220,17 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 | T020 | Verify package importability | COMPLETE |
 | T021 | Reconcile `docs/specs/SPEC-001.md` redirect | COMPLETE |
 | T022 | Update `docs/CURRENT_STATE.md` | COMPLETE |
-| T023 | Full `pytest tests/` green | COMPLETE (20/20) |
-| T024 | STOP — cross-document consistency review | **PENDING** |
+| T023 | Full `pytest tests/` green | COMPLETE (90/90) |
+| T024 | STOP — cross-document consistency review | COMPLETE (**PASS** 2026-08-23, dual-verified; report in `specs/001-hierarchical-runtime-dag/reviews/`) |
 
 ### 5.2 Future Tasks (Gated)
 
 | ID | Phase | Status |
 |----|-------|--------|
-| T100 | Phase 1: Contracts & Event Acquisition | GATED |
-| T200 | Phase 2: Tier 1 Supervisor | GATED |
-| T300 | Phase 3: Tier 2 Domain Managers | GATED |
-| T400 | Phase 4: Tier 3 Workers | GATED |
+| T100 | Phase 1: Contracts & Event Acquisition | **COMPLETE** (2026-08-23) |
+| T200 | Phase 2: Tier 1 Supervisor | **COMPLETE** (2026-08-23) |
+| T300 | Phase 3: Tier 2 Domain Managers | **COMPLETE** (2026-08-23) |
+| T400 | Phase 4: Tier 3 Workers | **COMPLETE** (2026-08-23) |
 | T500 | Phase 5: Tier 4 Validator | GATED |
 | T600 | Phase 6: Tier 5 Reducer + ActionValidation + Escalation | GATED |
 
@@ -231,48 +238,39 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 
 ## 6. Verification Results
 
-### 6.1 Test Suite
+### 6.1 Test Suite (latest run — 2026-08-23)
 
 ```
-tests/contract/test_contracts.py::test_all_contract_schemas_are_valid_json PASSED
-tests/contract/test_contracts.py::test_all_fixtures_validate_against_event_schema PASSED
-tests/contract/test_contracts.py::test_fixture_expected_files_complete PASSED
-tests/contract/test_contracts.py::test_fixture_002_requires_escalation PASSED
-tests/contract/test_contracts.py::test_fixture_001_has_no_escalation PASSED
-tests/integration/test_fixture_run.py::test_every_fixture_has_expected_assertions PASSED
-tests/integration/test_fixture_run.py::test_fixture_envelope_is_event_shaped PASSED
-tests/integration/test_fixture_run.py::test_run_fixture_script_exits_zero_for_all_fixtures PASSED
-tests/integration/test_fixture_run.py::test_fixture_pairs_valid_json PASSED
-tests/test_knowledge_brain.py::test_brain_collection_exists_and_populated PASSED
-tests/test_knowledge_brain.py::test_brain_metadata_schema_integrity PASSED
-tests/test_knowledge_brain.py::test_brain_semantic_retrieval_supervisor_dag PASSED
-tests/test_knowledge_brain.py::test_brain_spec_contract_retrieval PASSED
-tests/test_knowledge_brain.py::test_brain_build_and_adk_plan_retrieval PASSED
-tests/test_secret_handling.py::test_leaked_token_is_not_in_sync_source PASSED
-tests/test_secret_handling.py::test_no_committed_token_fallback_in_sync_source PASSED
-tests/test_secret_handling.py::test_get_notion_token_fails_fast_without_env PASSED
-tests/test_secret_handling.py::test_get_notion_token_loads_dotenv PASSED
-tests/test_secret_handling.py::test_get_notion_token_env_takes_precedence PASSED
-tests/test_secret_handling.py::test_get_notion_token_reads_env PASSED
-
-=========================== 20 passed in 12.96s ============================
+$ .venv/bin/python -m pytest tests/ -q
+........................................................................ [ 80%]
+..................                                                       [100%]
+90 passed in 21.57s
 ```
 
-### 6.2 Fixture Runner
+| Suite | Tests |
+|-------|-------|
+| `tests/contract/test_contracts.py` | 5 |
+| `tests/contract/test_event_acquisition.py` | 19 (Phase 1) |
+| `tests/contract/test_supervisor.py` | 18 (Phase 2) |
+| `tests/contract/test_domain_managers.py` | 15 (Phase 3) |
+| `tests/contract/test_workers.py` | 18 (Phase 4) |
+| `tests/integration/test_fixture_run.py` | 4 |
+| `tests/test_knowledge_brain.py` | 5 |
+| `tests/test_secret_handling.py` | 6 |
+| **Total** | **90** |
 
-```
-[ok] FIXTURE-001: event envelope passes event.schema.json
-[ok] FIXTURE-001: expected assertions present (9 groups)
-[ok] FIXTURE-001: artifact 'CoveragePlan' covered by assertions
-[ok] FIXTURE-001: artifact 'EvidenceShard' covered by assertions
-[ok] FIXTURE-001: artifact 'DomainFinding' covered by assertions
-[ok] FIXTURE-001: artifact 'ValidatedSituation' covered by assertions
-[ok] FIXTURE-001: artifact 'DecisionRecord' covered by assertions
-[ok] FIXTURE-001: artifact 'ProposedAction' covered by assertions
-[ok] FIXTURE-001: artifact 'ActionValidation' covered by assertions
-[ok] FIXTURE-002: event envelope passes event.schema.json
-[ok] FIXTURE-002: expected assertions present (8 groups)
-[ok] FIXTURE-002: artifact 'Escalation' covered by assertions
+### 6.2 Fixture Runner (latest batch run — all 4 fixtures)
+
+```text
+$ .venv/bin/python scripts/run_fixture.py   # excerpt; full log shows every stage [ok]
+[ok] FIXTURE-001: Supervisor dispatches ['code-intelligence-manager'] (constraints enforced: max_concurrent_managers=3, global_timeout_seconds=300, require_human_above_risk_level='critical')
+[ok] FIXTURE-002: Supervisor dispatches ['code-intelligence-manager', 'delivery-health-manager', 'production-health-manager'] (constraints enforced: ...)
+[ok] FIXTURE-003: DomainFinding FND-3000-code aggregates 1 shard(s) in domain code (confidence 0.85)
+[ok] FIXTURE-003: DomainFinding FND-3000-delivery aggregates 1 shard(s) in domain delivery (confidence 0.75)
+[ok] FIXTURE-003: DomainFinding FND-3000-production aggregates 1 shard(s) in domain production (confidence 0.68)
+[ok] FIXTURE-004: EvidenceShard ES-4000-pr-pre-flight-ast-worker emitted by pr-pre-flight-ast-worker in domain code (confidence 0.85)
+[ok] FIXTURE-004: EvidenceShard ES-4000-build-log-and-flakiness-worker emitted by build-log-and-flakiness-worker in domain delivery (confidence 0.8)
+[ok] FIXTURE-004: EvidenceShard ES-4000-telemetry-correlation-worker emitted by telemetry-correlation-worker in domain production (confidence 0.68)
 
 Fixture validation complete. 0 error(s).
 ```
@@ -366,7 +364,8 @@ Fixture validation complete. 0 error(s).
 | Issue | Impact | Resolution |
 |-------|--------|------------|
 | ~~No remote configured~~ ✅ RESOLVED 2026-08-23 | — | `origin` = github.com/asifdotpy/forge-mind (public, hardened) |
-| Runtime tiers NOT implemented | Phase 0 gate | By design; contracts + expected assertions only |
+| ~~Runtime tiers NOT implemented~~ ✅ RESOLVED through Tier 3 2026-08-23 | Phases 1–4 shipped | Tier 4 Validator + Tier 5 Reducer remain (Phases 5–6, gated) |
+| Dependabot: `chromadb` CRITICAL + `cryptography` advisories | None (mitigated; see FAILURE_LOG FAIL-004) | Accepted with mitigation — embedded Chroma client only, no cryptography usage; re-evaluate on upstream releases |
 | ForgeMind project-memory ChromaDB not wired | Memory in repo docs | Planned: forge-mind-scoped MCP server |
 | ~~T024 cross-document consistency review pending~~ ✅ CLOSED 2026-08-23 | Phase 0 exit | PASS (dual-verified Cline + SpecForge); W1–W5 tracked as T025 normalization, due before T200 |
 
@@ -377,9 +376,10 @@ Fixture validation complete. 0 error(s).
 | Order | Action | Owner |
 |-------|--------|-------|
 | 1 | ~~REVIEW GATE~~ ✅ CLOSED 2026-08-23 — T024 PASS (dual-verified: Cline + SpecForge); Phase 0 formally closed; report in `specs/001-hierarchical-runtime-dag/reviews/` | Cline + SpecForge |
-| 2 | ~~Commit Phase 0 baseline + specify-cli + Notion MCP + boundary~~ ✅ DONE 2026-08-23 (5 granular commits, ggshield-gated, pushed to origin) | Cline |
-| 3 | Phase 1 UNBLOCKED — Contracts & Event Acquisition (T100) on user go | User (with SpecForge planning) |
-| 4 | ~~Configure GitHub remote and token~~ ✅ DONE 2026-08-23 (public repo asifdotpy/forge-mind) | Cline |
+| 2 | ~~Commit Phase 0 baseline~~ ✅ DONE 2026-08-23 (5 granular commits, ggshield-gated, pushed to origin) | Cline |
+| 3 | ~~Configure GitHub remote and token~~ ✅ DONE 2026-08-23 (public repo asifdotpy/forge-mind) | Cline |
+| 4 | ~~Phases 1–4 runtime implementation~~ ✅ DONE 2026-08-23 — T100/T200/T300/T400 complete, 90/90 green, committed & pushed (`02be84a`) | Cline |
+| 5 | Phase 5 UNBLOCKED — Tier 4 Cross-Lifecycle Validator (T500): reconcile DomainFindings → ValidatedSituation; awaiting SpecForge prompt | User (with SpecForge planning) |
 
 ---
 
@@ -394,7 +394,7 @@ Per `spec.md` Stop Condition:
 - [x] `contracts/` — all 9 schemas valid (draft-07) *(9/9 SCHEMA-OK, machine-verified 2026-08-23)*
 - [x] `fixtures/` — 2 fixtures + expected assertions pass *(runner exit 0, 0 errors)*
 - [x] `src/forgemind/` importable
-- [x] `pytest tests/` green (20/20)
+- [x] `pytest tests/` green (20/20 at Phase-0 gate closure; 90/90 as of Phases 1–4)
 - [x] Cross-document consistency review passed (constitution ↔ spec ↔ data-model ↔ plan ↔ tasks ↔ fixtures) — **T024 PASS**, dual-verified (Cline + SpecForge), report: `specs/001-hierarchical-runtime-dag/reviews/T024-consistency-review.md`
 - [x] `docs/CURRENT_STATE.md` updated
 
@@ -404,4 +404,5 @@ Per `spec.md` Stop Condition:
 
 *Generated by SpecForge (specforge profile) — 2026-08-22*  
 *Updated: GitHub remote configured & Phase 0 baseline pushed (Cline) — 2026-08-23*  
-*Updated: T024 cross-document consistency review PASS — Phase 0 gate CLOSED (Cline + SpecForge dual verification) — 2026-08-23*
+*Updated: T024 cross-document consistency review PASS — Phase 0 gate CLOSED (Cline + SpecForge dual verification) — 2026-08-23*  
+*Updated: Phases 1–4 implemented & verified (T100/T200/T300/T400), 90/90 green, pushed through `02be84a`; body sections refreshed to match (Cline) — 2026-08-23*
