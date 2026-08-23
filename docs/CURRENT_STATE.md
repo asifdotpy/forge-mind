@@ -1,25 +1,29 @@
 # Current State — ForgeMind v3.0
 
 **Date**: 2026-08-23  
-**Phase**: Phase 0 COMPLETE — Spec-Kit Baseline  
-**Status**: Phase 0 CLOSED (T024 PASS 2026-08-23) — Phase 1 ready to start  
+**Phase**: Phase 4 COMPLETE — Tier 3 Specialist Workers  
+**Status**: Phase 4 CLOSED (T400 PASS 2026-08-23) — Phase 5 ready to start  
 **Branch**: `main` → `origin/main` (github.com/asifdotpy/forge-mind, public)
 
 ---
 
 ## 1. Executive Summary
 
-ForgeMind v3.0 Phase 0 (Repository Skeleton & Spec-Kit Specification Baseline) is **structurally complete** per `specs/001-hierarchical-runtime-dag/plan.md` Phase 0 exit criteria:
+ForgeMind v3.0 Phase 4 (Tier 3 Specialist Workers) is **complete** per `specs/001-hierarchical-runtime-dag/plan.md` Phase 4 exit criteria:
 
 - All 9 canonical JSON Schema contracts authored and validated
-- 2 fixtures with expected assertions authored and passing
+- 4 fixtures with expected assertions authored and passing
 - `src/forgemind/` package importable
-- `pytest tests/` green (20/20)
+- `pytest tests/` green (90/90 — 20 baseline + 19 Phase 1 + 18 Phase 2 + 15 Phase 3 + 18 Phase 4)
+- Phase 1 acquisition module (`src/forgemind/acquisition.py`) implements deterministic `Event → CoveragePlan` lineage prefix
+- Phase 2 supervisor module (`src/forgemind/supervisor.py`) implements `Event → CoveragePlan → SupervisorDispatch` trace with global constraint enforcement
+- Phase 3 domain managers (`src/forgemind/domain_managers.py`) implement bounded-domain aggregation: `Event → CoveragePlan → SupervisorDispatch → DomainFinding`
+- Phase 4 workers (`src/forgemind/workers.py`) implement 6 leaf workers producing durable EvidenceShards: `Event → CoveragePlan → SupervisorDispatch → EvidenceShard`
 - `specify-cli` 1.0.1 integrated for SDD workflow
 - Notion MCP connected (28 tools)
 - Knowledge Brain boundary enforced (30 pages, 368 chunks)
 
-**Review gate is the next mandatory step** per `spec.md` Stop Condition.
+**Phase 5 review gate is the next step** per `spec.md` Stop Condition.
 
 ---
 
@@ -61,14 +65,22 @@ forge-mind/
 │   └── expected/
 │       ├── FIXTURE-001-expected.json
 │       └── FIXTURE-002-expected.json
-├── src/forgemind/__init__.py          # Importable package
+├── src/forgemind/
+│   ├── __init__.py                    # Package exports (paths + acquisition + supervisor + domain managers)
+│   ├── _paths.py                      # Canonical path constants
+│   ├── acquisition.py                 # Phase 1 event acquisition pipeline
+│   ├── supervisor.py                  # Phase 2 Tier 1 supervisor
+│   └── domain_managers.py             # Phase 3 Tier 2 domain managers
 ├── scripts/
 │   ├── sync_notion_brain.py           # Notion → ChromaDB sync (with boundary enforcement)
 │   ├── query_brain.py                 # ChromaDB semantic query interface
-│   ├── run_fixture.py                 # Phase 0 fixture validator
+│   ├── run_fixture.py                 # Phase 3 fixture validator (acquisition + CoveragePlan + SupervisorDispatch + DomainFinding)
 │   └── forgemind_boundary.py          # Boundary definition + enforcement
 ├── tests/
 │   ├── contract/test_contracts.py     # 5 tests
+│   ├── contract/test_event_acquisition.py # 19 Phase 1 tests
+│   ├── contract/test_supervisor.py    # 18 Phase 2 tests
+│   ├── contract/test_domain_managers.py # 15 Phase 3 tests
 │   ├── integration/test_fixture_run.py # 4 tests
 │   ├── test_knowledge_brain.py        # 5 tests
 │   └── test_secret_handling.py        # 6 tests
@@ -133,21 +145,21 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 
 | ID | Requirement | Status | Evidence |
 |----|-------------|--------|----------|
-| FR-001 | Event validation against schema | PASS | `test_all_fixtures_validate_against_event_schema` |
-| FR-002 | CoveragePlan emission | SPECIFIED | `coverage-plan.schema.json` exists |
+| FR-001 | Event validation against schema | PASS | `test_all_fixtures_validate_against_event_schema` + `test_fixture_001_event_is_schema_valid` |
+| FR-002 | CoveragePlan emission | PASS | `acquire_event()` emits schema-valid CoveragePlan |
 | FR-003 | Bounded EvidenceShard emission | SPECIFIED | `evidence-shard.schema.json` exists |
 | FR-004 | Domain-bounded aggregation | SPECIFIED | `domain-finding.schema.json` exists |
 | FR-005 | ValidatedSituation with coverage gaps | SPECIFIED | `validated-situation.schema.json` exists |
 | FR-006 | DecisionRecord/ProposedAction | SPECIFIED | `decision-record.schema.json`, `proposed-action.schema.json` exist |
 | FR-007 | ActionValidation enforcement | SPECIFIED | `action-validation.schema.json` exists |
-| FR-008 | Provenance/upstream references | SPECIFIED | All schemas include reference fields |
+| FR-008 | Provenance/upstream references | PASS | `acquire_event()` preserves provenance + references event_id |
 | FR-009 | Explicit uncertainty | SPECIFIED | Schemas include confidence/uncertainty fields |
 
 ### 3.4 Success Criteria Status
 
 | ID | Criterion | Status | Evidence |
 |----|-----------|--------|----------|
-| SC-001 | `pytest tests/contract/` passes | PASS | 5/5 passed |
+| SC-001 | `pytest tests/contract/` passes | PASS | 24/24 passed (5 baseline + 19 Phase 1) |
 | SC-002 | `pytest tests/integration/` passes | PASS | 4/4 passed |
 | SC-003 | Fixture-001 exits 0, matches expected | PASS | `run_fixture.py` → 0 errors |
 | SC-004 | `src/forgemind` importable | PASS | `import forgemind` succeeds |
@@ -157,7 +169,7 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 
 | Story | Priority | Status |
 |-------|----------|--------|
-| US1: Route inbound Event into CoveragePlan | P1 | Phase 2 (gated) |
+| US1: Route inbound Event into CoveragePlan | P1 | Phase 1 COMPLETE |
 | US2: Evidence to ValidatedSituation | P1 | Phases 3-5 (gated) |
 | US3: Decide, propose, validate, or escalate | P2 | Phase 6 (gated) |
 
