@@ -1,0 +1,123 @@
+{
+  "fixture_id": "FIXTURE-005",
+  "name": "Tier 4 cross-lifecycle validator reconciliation",
+  "version": "3.0",
+  "purpose": "Provides schema-valid DomainFindings from all three lifecycle domains so the Phase-5 fixture runner can drive the CrossLifecycleValidator and verify the emitted ValidatedSituation: explicit coverage accounting, supporting/conflicting separation, deduplication, conservative causality, provenance, and the no-decision-artifact boundary.",
+  "event": {
+    "event_id": "EVT-5000",
+    "situation_id": "SIT-5000",
+    "type": "incident",
+    "source": "fixture",
+    "summary": "Elevated auth errors after a staging deployment; multi-domain reconciliation into a ValidatedSituation",
+    "timestamp": "2026-08-22T13:00:00Z",
+    "reference": "https://github.com/example/org/monitoring/incidents/5000",
+    "affected_entities": ["auth-service", "edge-gateway"],
+    "provenance": {
+      "ingested_at": "2026-08-22T13:00:01Z",
+      "source_system": "fixture-harness",
+      "correlated_signals": 3
+    },
+    "payload": {
+      "scenario": "validator",
+      "deployment": "staging",
+      "affected_domains": ["code", "delivery", "production"]
+    }
+  },
+  "domain_findings": [
+    {
+      "finding_id": "FND-5000-code",
+      "situation_id": "SIT-5000",
+      "domain": "code",
+      "evidence_shard_ids": ["ES-5000-code"],
+      "summary": "Aggregated 1 EvidenceShard(s) for the code domain (CodeIntelligenceManager); 2 supported claim(s), 0 conflict(s), 1 uncertainty/ies preserved.",
+      "supported_claims": [
+        "the deployed changeset touches the authentication request path",
+        "retry logic guards the refresh-token route"
+      ],
+      "conflicts": [],
+      "coverage": {
+        "domain": "code",
+        "evidence_shard_count": 1,
+        "coverage_scope": "all"
+      },
+      "confidence": 0.82,
+      "uncertainties": [
+        "ast caller-graph coverage is partial for edge-gateway consumers"
+      ],
+      "provenance": {
+        "event_id": "EVT-5000",
+        "situation_id": "SIT-5000",
+        "coverage_plan_id": "CP-5000",
+        "execution_trace_id": "TRC-5000",
+        "evidence_shard_ids": ["ES-5000-code"],
+        "produced_by": "CodeIntelligenceManager",
+        "spec_phase": "SPEC-001-phase-3-tier-2-domain-managers"
+      },
+      "execution_trace_id": "TRC-5000"
+    },
+    {
+      "finding_id": "FND-5000-delivery",
+      "situation_id": "SIT-5000",
+      "domain": "delivery",
+      "evidence_shard_ids": ["ES-5000-delivery"],
+      "summary": "Aggregated 1 EvidenceShard(s) for the delivery domain (DeliveryHealthManager); 2 supported claim(s), 0 conflict(s), 1 uncertainty/ies preserved.",
+      "supported_claims": [
+        "the staging deployment preceded the auth-service error spike",
+        "the build pipeline reported zero blocking failures for the changeset"
+      ],
+      "conflicts": [],
+      "coverage": {
+        "domain": "delivery",
+        "evidence_shard_count": 1,
+        "coverage_scope": "all"
+      },
+      "confidence": 0.9,
+      "uncertainties": [
+        "flakiness baseline unavailable for this suite"
+      ],
+      "provenance": {
+        "event_id": "EVT-5000",
+        "situation_id": "SIT-5000",
+        "coverage_plan_id": "CP-5000",
+        "execution_trace_id": "TRC-5000",
+        "evidence_shard_ids": ["ES-5000-delivery"],
+        "produced_by": "DeliveryHealthManager",
+        "spec_phase": "SPEC-001-phase-3-tier-2-domain-managers"
+      },
+      "execution_trace_id": "TRC-5000"
+    },
+    {
+      "finding_id": "FND-5000-production",
+      "situation_id": "SIT-5000",
+      "domain": "production",
+      "evidence_shard_ids": ["ES-5000-production"],
+      "summary": "Aggregated 1 EvidenceShard(s) for the production domain (ProductionHealthManager); 3 supported claim(s), 0 conflict(s), 1 uncertainty/ies preserved.",
+      "supported_claims": [
+        "the auth-service error rate spiked to 12.5% after the staging deployment",
+        "the staging deployment preceded the auth-service error spike",
+        "no retry logic guards the refresh-token route"
+      ],
+      "conflicts": [],
+      "coverage": {
+        "domain": "production",
+        "evidence_shard_count": 1,
+        "coverage_scope": "all"
+      },
+      "confidence": 0.42,
+      "uncertainties": [
+        "telemetry observation window is short"
+      ],
+      "provenance": {
+        "event_id": "EVT-5000",
+        "situation_id": "SIT-5000",
+        "coverage_plan_id": "CP-5000",
+        "execution_trace_id": "TRC-5000",
+        "evidence_shard_ids": ["ES-5000-production"],
+        "produced_by": "ProductionHealthManager",
+        "spec_phase": "SPEC-001-phase-3-tier-2-domain-managers"
+      },
+      "execution_trace_id": "TRC-5000"
+    }
+  ],
+  "expected_artifacts": ["Event", "CoveragePlan", "DomainFinding", "ValidatedSituation"]
+}

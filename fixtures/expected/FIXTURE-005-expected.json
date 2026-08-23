@@ -1,0 +1,63 @@
+{
+  "fixture_id": "FIXTURE-005",
+  "kind": "expected-assertions",
+  "version": "3.0",
+  "assertions": [
+    {
+      "artifact": "Event",
+      "schema": "contracts/event.schema.json",
+      "checks": [
+        "event_id == EVT-5000",
+        "situation_id == SIT-5000",
+        "type == incident",
+        "source == fixture",
+        "timestamp is ISO-8601",
+        "payload selects all three domains"
+      ]
+    },
+    {
+      "artifact": "CoveragePlan",
+      "schema": "contracts/coverage-plan.schema.json",
+      "checks": [
+        "produced by Tier 1 Engineering Supervisor",
+        "references situation_id SIT-5000",
+        "selected_domains == [code, delivery, production]",
+        "selected_managers map one per selected domain"
+      ]
+    },
+    {
+      "artifact": "DomainFinding",
+      "schema": "contracts/domain-finding.schema.json",
+      "checks": [
+        "one finding per covered domain supplied in fixture",
+        "finding_id matches ^FND-[A-Za-z0-9-]+$",
+        "references situation_id SIT-5000",
+        "provenance references event_id EVT-5000, coverage_plan_id CP-5000, execution_trace_id TRC-5000"
+      ]
+    },
+    {
+      "artifact": "ValidatedSituation",
+      "schema": "contracts/validated-situation.schema.json",
+      "checks": [
+        "emitted solely by the Tier 4 CrossLifecycleValidator",
+        "validated_situation_id matches ^VS-[A-Za-z0-9-]+$ (VS-5000-3)",
+        "references situation_id SIT-5000 and all three finding_ids",
+        "causality_status is one of unsupported|correlated|supported|verified (fixture yields correlated)",
+        "coverage provided_domains == all three domains; missing_domains empty; coverage_percentage == 100",
+        "supporting_evidence carries the deployment-precedes-spike claim shared by delivery+production",
+        "conflicting_evidence flags retry-logic claim asserted in code but negated in production",
+        "deduplication collapses the repeated cross-domain signal",
+        "confidence equals the minimum finding confidence (0.42)",
+        "uncertainties preserved from every finding plus low-confidence note",
+        "provenance references event_id EVT-5000, coverage_plan_id CP-5000, execution_trace_id TRC-5000, produced_by CrossLifecycleValidator"
+      ]
+    },
+    {
+      "artifact": "Terminal",
+      "checks": [
+        "Tier 4 reconciled across domains without emitting DecisionRecord / ProposedAction",
+        "no decision artifact keys on the ValidatedSituation (boundary guard)"
+      ]
+    }
+  ]
+}
