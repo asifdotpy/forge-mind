@@ -24,6 +24,13 @@ CoveragePlan's global constraints are enforced, and provenance references
 the upstream event_id and coverage_plan_id.  SupervisorDispatch is a
 trace record, not a canonical artifact; manager execution remains Phase 3.
 
+Phase 5 scope (T500 — Tier 4 Validator): when a fixture carries DomainFindings
+(the ``domain_findings`` array), the Tier 4 Cross-Lifecycle Validator
+reconciles them into a ValidatedSituation; the runner re-validates it against
+validated-situation.schema.json and checks coverage accounting (missing
+domains flagged, never silent), provenance lineage, and the no-decision-
+artifact boundary guard.  Fixtures without ``domain_findings`` are unaffected.
+
 Usage:
     python scripts/run_fixture.py                                            # all fixtures
     python scripts/run_fixture.py fixtures/inputs/FIXTURE-001-happy-path.json
@@ -48,6 +55,7 @@ from forgemind.acquisition import EventValidationError, acquire_event, persist_a
 from forgemind.supervisor import Supervisor, SupervisorError
 from forgemind.domain_managers import DomainError, ManagerCoordinator
 from forgemind.workers import WorkerCoordinator, WorkerError
+from forgemind.validator import CrossLifecycleValidator, ValidatorError
 
 
 def load_json(path):
@@ -300,7 +308,91 @@ def validate_fixture(fixture_path: Path, out_dir=None) -> int:
                 print(f"[FAIL] {fid}: {worker_name} worker failed -> {message}")
                 errors += 1
 
-    # 8) Optional durability demonstration (--out DIR).
+    # 8) Phase 5 (T500): if the fixture carries DomainFindings (the
+    #    ``domain_findings`` array), run the Tier 4 Cross-Lifecycle Validator
+    #    over the CoveragePlan + findings and validate the emitted
+    #    ValidatedSituation.  Absent findings are fine for non-validator
+    #    fixtures and do not count as an error.
+    fixture_findings = fixture.get("domain_findings")
+    if fixture_findings:
+        try:
+            validated = CrossLifecycleValidator().validate(plan, fixture_findings)
+        except ValidatorError as exc:
+            print(f"[FAIL] {fid}: CrossLifecycleValidator rejected input -> {exc}")
+            errors += 1
+        else:
+            try:
+                jsonschema.validate(
+                    validated,
+                    load_json(CONTRACTS_DIR / "validated-situation.schema.json"),
+                )
+            except jsonschema.ValidationError as exc:
+                print(
+                    f"[FAIL] {fid}: ValidatedSituation "
+                    f"{validated.get('validated_situation_id')} vs "
+                    f"validated-situation.schema.json -> {exc.message}"
+                )
+                errors += 1
+            prov = validated["provenance"]
+            coverage = validated["coverage"]
+            provided = sorted(coverage["provided_domains"])
+            expected_missing = sorted(
+                d
+                for d in plan["selected_domains"]
+                if d not in provided
+            )
+            boundary_ok = not any(
+                key in validated
+                for key in (
+                    "decision_record_id",
+                    "proposed_action_id",
+                    "action_id",
+                )
+            )
+            structure_ok = (
+                validated["situation_id"] == plan["situation_id"]
+                and prov["event_id"] == event["event_id"]
+                and prov["coverage_plan_id"] == plan["coverage_plan_id"]
+                and prov["execution_trace_id"] == plan["execution_trace_id"]
+                and prov["produced_by"] == "CrossLifecycleValidator"
+                and validated["execution_trace_id"] == plan["execution_trace_id"]
+                and provided == sorted(f["domain"] for f in fixture_findings)
+                and sorted(coverage["missing_domains"]) == expected_missing
+            )
+            if structure_ok and boundary_ok:
+                print(
+                    f"[ok] {fid}: ValidatedSituation "
+                    f"{validated['validated_situation_id']} reconciles "
+                    f"{len(validated['finding_ids'])} finding(s) across "
+                    f"{len(provided)} domain(s) "
+                    f"(causality_status={validated['causality_status']}, "
+                    f"confidence {validated['confidence']})"
+                )
+                print(
+                    f"[ok] {fid}: validator coverage explicit "
+                    f"(provided={provided}, "
+                    f"missing={coverage['missing_domains']}, "
+                    f"coverage_percentage={coverage['coverage_percentage']})"
+                )
+                print(
+                    f"[ok] {fid}: validator provenance intact "
+                    f"(event_id={prov['event_id']}, "
+                    f"coverage_plan_id={prov['coverage_plan_id']}, "
+                    f"execution_trace_id={prov['execution_trace_id']})"
+                )
+                print(
+                    f"[ok] {fid}: boundary guard passed (no decision artifact "
+                    "emitted by Tier 4)"
+                )
+            else:
+                print(
+                    f"[FAIL] {fid}: ValidatedSituation "
+                    f"{validated.get('validated_situation_id')} structure invalid "
+                    "(provenance, coverage or boundary guard failed)"
+                )
+                errors += 1
+
+    # 9) Optional durability demonstration (--out DIR).
     if out_dir is not None:
         for path in persist_artifacts(acquired, out_dir):
             print(f"[ok] {fid}: persisted {path}")

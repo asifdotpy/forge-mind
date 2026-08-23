@@ -12,6 +12,12 @@ Phase 1 (SPEC-001 T100 — Contracts & Event Acquisition): exposes
 Phase 2 (SPEC-001 T200 — Tier 1 Supervisor): exposes :class:`Supervisor`,
 which wraps acquisition and emits the ``SupervisorDispatch`` trace record
 (``Supervisor -> selected Managers + coverage decision``).
+
+Phase 5 (SPEC-001 T500 — Tier 4 Cross-Lifecycle Validator): exposes
+:class:`CrossLifecycleValidator`, which reconciles DomainFindings from all
+selected domains into a single ``ValidatedSituation`` — the sole tier
+authorized to reconcile evidence across domain boundaries, and the source
+of truth consumed by the Tier 5 Decision Reducer (Phase 6).
 """
 
 __version__ = "0.1.0"
@@ -50,12 +56,14 @@ from forgemind.workers import (
     WorkerError,
     WorkerRegistry,
 )
+from forgemind.validator import CrossLifecycleValidator, ValidatorError
 
 __all__ = [
     "AlertStormClusteringWorker",
     "BuildLogAndFlakinessWorker",
     "CONTRACTS_DIR",
     "CodeIntelligenceManager",
+    "CrossLifecycleValidator",
     "DeliveryHealthManager",
     "DocsDriftAndSpecWorker",
     "DomainError",
@@ -73,6 +81,7 @@ __all__ = [
     "Supervisor",
     "SupervisorError",
     "TelemetryCorrelationWorker",
+    "ValidatorError",
     "Worker",
     "WorkerCoordinator",
     "WorkerError",
