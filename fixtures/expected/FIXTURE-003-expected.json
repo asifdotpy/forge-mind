@@ -1,0 +1,56 @@
+{
+  "fixture_id": "FIXTURE-003",
+  "kind": "expected-assertions",
+  "version": "3.0",
+  "assertions": [
+    {
+      "artifact": "Event",
+      "schema": "contracts/event.schema.json",
+      "checks": [
+        "event_id == EVT-3000",
+        "situation_id == SIT-3000",
+        "type == incident",
+        "source == fixture",
+        "timestamp is ISO-8601",
+        "payload selects all three domains"
+      ]
+    },
+    {
+      "artifact": "CoveragePlan",
+      "schema": "contracts/coverage-plan.schema.json",
+      "checks": [
+        "produced by Tier 1 Engineering Supervisor",
+        "references situation_id SIT-3000",
+        "selected_domains == [code, delivery, production]",
+        "selected_managers map one per selected domain"
+      ]
+    },
+    {
+      "artifact": "EvidenceShard",
+      "schema": "contracts/evidence-shard.schema.json",
+      "checks": [
+        "one shard per covered domain",
+        "emitted by a Tier 3 worker with worker name",
+        "confidence 0..1",
+        "uncertainties[] preserved"
+      ]
+    },
+    {
+      "artifact": "DomainFinding",
+      "schema": "contracts/domain-finding.schema.json",
+      "checks": [
+        "one finding per covered domain supplied with evidence",
+        "finding_id matches ^FND-[A-Za-z0-9-]+$",
+        "references situation_id SIT-3000",
+        "provenance references event_id EVT-3000, coverage_plan_id, execution_trace_id"
+      ]
+    },
+    {
+      "artifact": "Terminal",
+      "checks": [
+        "Phase 3 Tier 2 managers aggregated evidence without cross-domain reconciliation",
+        "no decision artifact emitted by Tier 2"
+      ]
+    }
+  ]
+}

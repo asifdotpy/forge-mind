@@ -1,0 +1,95 @@
+{
+  "fixture_id": "FIXTURE-003",
+  "name": "Multi-domain evidence for Tier 2 Domain Managers",
+  "version": "3.0",
+  "purpose": "Provides schema-valid EvidenceShards across all three lifecycle domains so the Phase-3 fixture runner can dispatch every Tier 2 Domain Manager (Code Intelligence, Delivery Health, Production Health).",
+  "event": {
+    "event_id": "EVT-3000",
+    "situation_id": "SIT-3000",
+    "type": "incident",
+    "source": "fixture",
+    "summary": "Elevated auth errors observed after a staging deployment touching auth-service and edge-gateway",
+    "timestamp": "2026-08-22T11:00:00Z",
+    "reference": "https://github.com/example/org/monitoring/incidents/3000",
+    "affected_entities": ["auth-service", "edge-gateway"],
+    "provenance": {
+      "ingested_at": "2026-08-22T11:00:01Z",
+      "source_system": "fixture-harness",
+      "correlated_signals": 3
+    },
+    "payload": {
+      "scenario": "domain-evidence",
+      "deployment": "staging",
+      "affected_domains": ["code", "delivery", "production"]
+    }
+  },
+  "evidence_shards": [
+    {
+      "evidence_shard_id": "ES-3000-code",
+      "situation_id": "SIT-3000",
+      "worker": "pr-pre-flight-ast-worker",
+      "domain": "code",
+      "observations": [
+        "auth/controller.go changed in the deployed changeset",
+        "a new route handler was added under /auth/refresh"
+      ],
+      "claims": [
+        "the changeset alters the authentication request path"
+      ],
+      "evidence_ids": ["E-3001"],
+      "confidence": 0.85,
+      "risk_level": "medium",
+      "uncertainties": [
+        "no AST diff available for edge-gateway consumer"
+      ],
+      "affected_entities": ["auth-service"],
+      "provenance": { "source": "fixture-harness", "citations": ["PR-3000/diff"] },
+      "execution_trace_id": "TRC-3000"
+    },
+    {
+      "evidence_shard_id": "ES-3000-delivery",
+      "situation_id": "SIT-3000",
+      "worker": "build-log-and-flakiness-worker",
+      "domain": "delivery",
+      "observations": [
+        "deployment to staging completed at 10:58 UTC",
+        "build log shows no new failures"
+      ],
+      "claims": [
+        "the deployment gate did not block the change"
+      ],
+      "evidence_ids": ["E-3-delivery"],
+      "confidence": 0.75,
+      "risk_level": "high",
+      "uncertainties": [
+        "flakiness baseline unavailable for this suite"
+      ],
+      "affected_entities": ["edge-gateway"],
+      "provenance": { "source": "fixture-harness", "citations": ["build-log-3000"] },
+      "execution_trace_id": "TRC-3000"
+    },
+    {
+      "evidence_shard_id": "ES-3000-production",
+      "situation_id": "SIT-3000",
+      "worker": "telemetry-correlation-worker",
+      "domain": "production",
+      "observations": [
+        "auth-service error rate rose to 12.5% after deployment",
+        "401 responses correlated with refresh-token expiry"
+      ],
+      "claims": [
+        "the elevated error rate correlates with the auth route change"
+      ],
+      "evidence_ids": ["E-3-telemetry"],
+      "confidence": 0.68,
+      "risk_level": "critical",
+      "uncertainties": [
+        "correlation does not establish causation without Tier 4 review"
+      ],
+      "affected_entities": ["auth-service", "edge-gateway"],
+      "provenance": { "source": "fixture-harness", "citations": ["telemetry-3000"] },
+      "execution_trace_id": "TRC-3000"
+    }
+  ],
+  "expected_artifacts": ["Event", "CoveragePlan", "EvidenceShard", "DomainFinding"]
+}
