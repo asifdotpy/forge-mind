@@ -116,11 +116,11 @@ forge-mind/
 
 | Status | Value |
 |--------|-------|
-| Working tree | Phase 5 + Phase 6 work present, **uncommitted** (docs refresh + T500/T600 implementation) |
+| Working tree | Clean (all phases committed and pushed) |
 | Branch | `main` tracking `origin/main` |
-| Commits | 27 conventional commits; local HEAD == remote HEAD (`4161a46` — validator wiring) |
-| Runtime phase commits | T100 acquisition · T200 supervisor · T300 domain managers · T400 workers · tiers wiring · T500 validator · validator wiring |
-| Pending commit | Phase 6 reducer + action gate + tests + FIXTURE-006 pair + runner step 9 + docs (ggshield-scan before commit) |
+| Commits | 31 conventional commits; local HEAD == remote HEAD (`e6ac46a` — Phase 6 docs) |
+| Runtime phase commits | T100 acquisition · T200 supervisor · T300 domain managers · T400 workers · tiers wiring · T500 validator · validator wiring · T600 reducer + action gate · reducer wiring |
+| Pending commit | None — all phases committed and pushed |
 
 ### 2.3 GitHub Remote (NEW — 2026-08-23)
 
@@ -212,7 +212,7 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 
 | Milestone | Description | Status |
 |-----------|-------------|--------|
-| **M1** | FIXTURE-001 passes through five-tier hierarchy locally | GATED (Phases 1–4 complete; Tier 4 Validator + Tier 5 Reducer pending) |
+| **M1** | FIXTURE-001 passes through five-tier hierarchy locally | **COMPLETE** (2026-08-24) |
 | **M2** | FIXTURE-001 passes through deployed Google Cloud application | GATED |
 | **M3** | Judge-visible surface proves provenance, validation, uncertainty, human control | GATED |
 
@@ -243,20 +243,20 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 | T200 | Phase 2: Tier 1 Supervisor | **COMPLETE** (2026-08-23) |
 | T300 | Phase 3: Tier 2 Domain Managers | **COMPLETE** (2026-08-23) |
 | T400 | Phase 4: Tier 3 Workers | **COMPLETE** (2026-08-23) |
-| T500 | Phase 5: Tier 4 Validator | GATED |
-| T600 | Phase 6: Tier 5 Reducer + ActionValidation + Escalation | GATED |
+| T500 | Phase 5: Tier 4 Validator | **COMPLETE** (2026-08-24) |
+| T600 | Phase 6: Tier 5 Reducer + ActionValidation + Escalation | **COMPLETE** (2026-08-24) |
 
 ---
 
 ## 6. Verification Results
 
-### 6.1 Test Suite (latest run — 2026-08-23)
+### 6.1 Test Suite (latest run — 2026-08-24)
 
 ```
 $ .venv/bin/python -m pytest tests/ -q
-........................................................................ [ 80%]
-..................                                                       [100%]
-90 passed in 21.57s
+........................................................................ [ 56%]
+........................................................                 [100%]
+128 passed in 5.47s
 ```
 
 | Suite | Tests |
@@ -266,23 +266,26 @@ $ .venv/bin/python -m pytest tests/ -q
 | `tests/contract/test_supervisor.py` | 18 (Phase 2) |
 | `tests/contract/test_domain_managers.py` | 15 (Phase 3) |
 | `tests/contract/test_workers.py` | 18 (Phase 4) |
+| `tests/contract/test_validator.py` | 15 (Phase 5) |
+| `tests/contract/test_reducer.py` | 23 (Phase 6) |
 | `tests/integration/test_fixture_run.py` | 4 |
 | `tests/test_knowledge_brain.py` | 5 |
 | `tests/test_secret_handling.py` | 6 |
-| **Total** | **90** |
+| **Total** | **128** |
 
-### 6.2 Fixture Runner (latest batch run — all 4 fixtures)
+### 6.2 Fixture Runner (latest batch run — all 6 fixtures)
 
-```text
-$ .venv/bin/python scripts/run_fixture.py   # excerpt; full log shows every stage [ok]
-[ok] FIXTURE-001: Supervisor dispatches ['code-intelligence-manager'] (constraints enforced: max_concurrent_managers=3, global_timeout_seconds=300, require_human_above_risk_level='critical')
-[ok] FIXTURE-002: Supervisor dispatches ['code-intelligence-manager', 'delivery-health-manager', 'production-health-manager'] (constraints enforced: ...)
-[ok] FIXTURE-003: DomainFinding FND-3000-code aggregates 1 shard(s) in domain code (confidence 0.85)
-[ok] FIXTURE-003: DomainFinding FND-3000-delivery aggregates 1 shard(s) in domain delivery (confidence 0.75)
-[ok] FIXTURE-003: DomainFinding FND-3000-production aggregates 1 shard(s) in domain production (confidence 0.68)
-[ok] FIXTURE-004: EvidenceShard ES-4000-pr-pre-flight-ast-worker emitted by pr-pre-flight-ast-worker in domain code (confidence 0.85)
-[ok] FIXTURE-004: EvidenceShard ES-4000-build-log-and-flakiness-worker emitted by build-log-and-flakiness-worker in domain delivery (confidence 0.8)
-[ok] FIXTURE-004: EvidenceShard ES-4000-telemetry-correlation-worker emitted by telemetry-correlation-worker in domain production (confidence 0.68)
+```
+$ .venv/bin/python scripts/run_fixture.py
+[ok] FIXTURE-001: Supervisor dispatches ['code-intelligence-manager']
+[ok] FIXTURE-002: Supervisor dispatches [all 3 managers]
+[ok] FIXTURE-002: DecisionRecord DR-2000 reduced to ESCALATION ESC-2000 (reason=coverage_gap)
+[ok] FIXTURE-003: DomainFinding FND-3000-{code,delivery,production} aggregate 1 shard(s)
+[ok] FIXTURE-004: EvidenceShard ES-4000-{pr-pre-flight-ast,build-log-and-flakiness,telemetry-correlation}-worker emitted
+[ok] FIXTURE-005: ValidatedSituation VS-5000-3 reconciles 3 findings (causality_status=correlated)
+[ok] FIXTURE-006: DecisionRecord DR-6000 reduced (autonomy_class=safe_autonomous, risk_level=low)
+[ok] FIXTURE-006: ActionValidation AV-6000 policy_result=allowed (checks passed: 4/4)
+[ok] FIXTURE-006: terminal outcome 'action' published (executed; no-bypass invariant held)
 
 Fixture validation complete. 0 error(s).
 ```
@@ -291,11 +294,11 @@ Fixture validation complete. 0 error(s).
 
 | Tool | Command | Result |
 |------|---------|--------|
-| specify-cli | `specify check` | Ready (Hermes Agent available) |
-| specify-cli | `specify integration list` | Hermes installed (default) |
+| specify-cli | `.venv/bin/specify check` | Ready (Hermes Agent available) |
+| specify-cli | `.venv/bin/specify integration list` | Hermes installed (default) |
 | Notion MCP | `hermes mcp test notion` | Connected, 28 tools |
-| Boundary | `python scripts/forgemind_boundary.py` | 30 pages, enforcement active |
-| Brain DB | `python scripts/query_brain.py "..."` | 368 chunks, semantic search working |
+| Boundary | `.venv/bin/python scripts/forgemind_boundary.py` | 30 pages, enforcement active |
+| Brain DB | `.venv/bin/python scripts/query_brain.py "..."` | 368 chunks, semantic search working |
 
 ---
 
@@ -325,8 +328,10 @@ Fixture validation complete. 0 error(s).
 
 ### 7.4 GitHub Integration
 
-- **Status**: DEFERRED (awaiting remote repo creation)
-- **Token**: Not yet provided
+| Property | Value |
+|----------|-------|
+| Status | **CONFIGURED** — `origin` → `github.com/asifdotpy/forge-mind.git` (public) |
+| Token | N/A (HTTPS with credential helper or SSH) |
 
 ---
 
@@ -363,9 +368,9 @@ Fixture validation complete. 0 error(s).
 |----------|-------|
 | Profile | `specforge` at `~/.hermes/profiles/specforge/` |
 | Role | Persistent engineering planner/verifier (not default coding agent) |
-| Model | `stepfun/step-3.7-flash:free` (nous provider) |
+| Model | `meituan/longcat-2.0:free` (nous provider) |
 | CWD | `/home/asif1/forge-mind` |
-| Skills | `specify-cli-reference` (at `~/.hermes/profiles/specforge/skills/`) |
+| Skills | `project-planning-and-verification`, `spec-driven-planning`, `specify-cli-reference` (at `~/.hermes/profiles/specforge/skills/`) |
 | System prompt | `~/.hermes/profiles/specforge/SOUL.md` (architectural invariants, four sources of truth) |
 | Memory policy | ForgeMind project-scoped ONLY; no universal Hermes memory for project facts |
 
@@ -378,7 +383,7 @@ Fixture validation complete. 0 error(s).
 | ~~No remote configured~~ ✅ RESOLVED 2026-08-23 | — | `origin` = github.com/asifdotpy/forge-mind (public, hardened) |
 | ~~Runtime tiers NOT implemented~~ ✅ RESOLVED through Tier 5 2026-08-24 | All five tiers shipped (Phases 1–6) | M1 complete; M2/M3 (cloud deployment, judge surface) remain |
 | Dependabot: `chromadb` CRITICAL + `cryptography` advisories | None (mitigated; see FAILURE_LOG FAIL-004) | Accepted with mitigation — embedded Chroma client only, no cryptography usage; re-evaluate on upstream releases |
-| ForgeMind project-memory ChromaDB not wired | Memory in repo docs | Planned: forge-mind-scoped MCP server |
+| ForgeMind project-memory | Dev-time grounding via ChromaDB (Notion sync) | Runtime memory: planned (M2+) |
 | ~~T024 cross-document consistency review pending~~ ✅ CLOSED 2026-08-23 | Phase 0 exit | PASS (dual-verified Cline + SpecForge); W1–W5 tracked as T025 normalization, due before T200 |
 
 ---
@@ -391,7 +396,9 @@ Fixture validation complete. 0 error(s).
 | 2 | ~~Commit Phase 0 baseline~~ ✅ DONE 2026-08-23 (5 granular commits, ggshield-gated, pushed to origin) | Cline |
 | 3 | ~~Configure GitHub remote and token~~ ✅ DONE 2026-08-23 (public repo asifdotpy/forge-mind) | Cline |
 | 4 | ~~Phases 1–4 runtime implementation~~ ✅ DONE 2026-08-23 — T100/T200/T300/T400 complete, 90/90 green, committed & pushed (`02be84a`) | Cline |
-| 5 | Phase 5 UNBLOCKED — Tier 4 Cross-Lifecycle Validator (T500): reconcile DomainFindings → ValidatedSituation; awaiting SpecForge prompt | User (with SpecForge planning) |
+| 5 | ~~Phases 5–6 runtime implementation~~ ✅ DONE 2026-08-24 — T500 validator + T600 reducer + action gate complete, 128/128 green, committed & pushed (`e6ac46a`) | Cline |
+| 6 | **M2** — Google Cloud deployment (Cloud Run, Artifact Registry, Pub/Sub) | User (with SpecForge planning) |
+| 7 | **M3** — Judge-visible surface (provenance, validation, uncertainty, human control) | User (with SpecForge planning) |
 
 ---
 

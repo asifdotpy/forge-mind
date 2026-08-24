@@ -21,7 +21,7 @@ Formally map every ForgeMind architectural component to an explicit Google Cloud
 | **Tier 3 — 6 Specialist Workers** | Leaf Worker Modules (Cloud Run) | Specialized evidence production (`EvidenceShard`), zero worker spawning authority |
 | **Tier 4 — Cross-Lifecycle Validator** | Validator Module (Cloud Run) | Multi-domain reconciliation, coverage assessment, conservative causality, `ValidatedSituation` |
 | **Tier 5 — Decision Reducer & Publisher** | Reducer/Policy Module (Cloud Run) | Risk-bound decision making, `DecisionRecord`, `ProposedAction`, Human Escalation |
-| **Shared Knowledge & State** | Memory Bank (GEAP) + Firestore / Local ChromaDB | Persistent cross-session state, findings, vector embeddings, entity relationships |
+| **Shared State & Memory** | Memory Bank (GEAP) + Firestore (planned) | Cross-session state, findings, vector embeddings, entity relationships |
 | **Reasoning Model** | Gemini 3.5 via Vertex AI | LLM reasoning, code analysis, and structured extraction across all agent nodes |
 | **Agent Framework & Runtime** | Google ADK 2 | Workflow runtime, deterministic orchestration, tool execution, pause/resume gates |
 | **Security & Guardrails** | Model Armor + Agent Identity (GEAP) | Content safety filters on untrusted inputs; least-privilege per agent node |

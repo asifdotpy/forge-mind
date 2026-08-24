@@ -11,8 +11,8 @@ Implement the canonical v3.0 runtime contract for ForgeMind's hierarchical DAG v
 ## Technical Context
 
 - **Language/Version**: Python 3.11 (uv-managed)
-- **Primary Dependencies**: `jsonschema` (contract validation), `pytest`, `chromadb` (brain), `requests`/`httpx` (Notion sync)
-- **Storage**: Local fixture files (`fixtures/inputs`, `fixtures/expected`); ChromaDB for Knowledge Brain; durable artifact store deferred (Phase 1+)
+- **Primary Dependencies**: `jsonschema` (contract validation), `pytest`, `chromadb` (dev-time grounding), `requests`/`httpx` (Notion sync)
+- **Storage**: Local fixture files (`fixtures/inputs`, `fixtures/expected`); dev-time knowledge grounding via ChromaDB (Notion sync); durable artifact store deferred (Phase 1+)
 - **Testing**: `pytest tests/contract/` (schema), `pytest tests/integration/` (fixture pipeline), fixture runner `scripts/run_fixture.py`
 - **Target Platform**: Linux CLI (fixture-backed ingress in Phase 0); Google Cloud (ADK-002) later
 - **Project Type**: library + CLI + agent runtime scaffold

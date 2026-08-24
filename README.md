@@ -2,7 +2,7 @@
 
 > **ForgeMind is an autonomous engineering control plane where specialized agents share context, understand relationships across the software lifecycle, reduce operational friction, and know when to act — and when to ask a human.**
 
-**Status:** 🟡 Architecture Locked — Implementation Scaffolding (Phase 0 complete, review-gated)
+**Status:** 🟢 SPEC-001 Complete — Five-Tier Runtime Implemented (Phases 1-6, 128 tests green, M1 local slice done)
 
 ## What ForgeMind Is
 
@@ -57,7 +57,7 @@ PYTHONPATH=src python scripts/run_fixture.py fixtures/inputs/FIXTURE-001-happy-p
 
 - **Reasoning Engine:** Gemini via Vertex AI *(planned)*
 - **Workflow & Orchestration:** Google ADK 2 *(planned)*
-- **Knowledge Brain:** Embedded ChromaDB (ONNX MiniLM embeddings)
+- **Knowledge Brain**: Notion (authoritative) + ChromaDB (dev-time grounding)
 - **Contracts:** JSON Schema draft-07 (9 canonical artifacts)
 - **Toolchain:** Python ≥ 3.11, pytest, uv, ggshield secret scanning
 

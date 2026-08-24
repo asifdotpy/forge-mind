@@ -53,5 +53,5 @@ AI is accelerating code generation, but writing more code does not help engineer
 ## ☁️ Technology Baseline
 - **Reasoning Engine**: Gemini 3.5 via Vertex AI
 - **Workflow & Orchestration**: Google ADK 2
-- **Knowledge Brain**: Embedded ChromaDB (ONNX MiniLM embeddings) & GEAP Memory Bank
+- **Knowledge Brain**: Notion (authoritative) + ChromaDB (dev-time grounding)
 - **Deployment**: Google Cloud Run (Modular Single Application)

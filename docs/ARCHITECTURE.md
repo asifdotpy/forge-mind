@@ -110,7 +110,7 @@ Event
 | **Tier 5 (Reducer & Publisher)**| Policy Node (Cloud Run) | Risk-bound action proposal, briefing generation |
 | **Workflow Runtime** | Google ADK 2 | Deterministic DAG orchestration, pause/resume human gates |
 | **Reasoning Model** | Gemini 3.5 via Vertex AI | Structured reasoning and multi-modal code analysis |
-| **Shared State & Memory** | Memory Bank (GEAP) + ChromaDB | Cross-session vector retrieval & entity knowledge |
+| **Shared State & Memory** | Memory Bank (GEAP) + Firestore (planned) | Cross-session vector retrieval & entity knowledge |
 | **Security & Guardrails** | Model Armor + Agent Identity | Input sanitization, policy guardrails, least-privilege |
 | **Observability** | Agent Observability + OpenTelemetry | End-to-end trace lineage and execution audit trails |
 

@@ -21,39 +21,39 @@ description: "Task list for 001-hierarchical-runtime-dag Phase 0 baseline"
 
 ### S0-Contracts (JSON Schema)
 
-- [ ] T001 [P] Create `specs/001-hierarchical-runtime-dag/contracts/event.schema.json`
-- [ ] T002 [P] Create `specs/001-hierarchical-runtime-dag/contracts/coverage-plan.schema.json`
-- [ ] T003 [P] Create `specs/001-hierarchical-runtime-dag/contracts/evidence-shard.schema.json`
-- [ ] T004 [P] Create `specs/001-hierarchical-runtime-dag/contracts/domain-finding.schema.json`
-- [ ] T005 [P] Create `specs/001-hierarchical-runtime-dag/contracts/validated-situation.schema.json`
-- [ ] T006 [P] Create `specs/001-hierarchical-runtime-dag/contracts/decision-record.schema.json`
-- [ ] T007 [P] Create `specs/001-hierarchical-runtime-dag/contracts/proposed-action.schema.json`
-- [ ] T008 [P] Create `specs/001-hierarchical-runtime-dag/contracts/action-validation.schema.json`
-- [ ] T009 [P] Create `specs/001-hierarchical-runtime-dag/contracts/escalation.schema.json`
+- [x] T001 [P] Create `specs/001-hierarchical-runtime-dag/contracts/event.schema.json`
+- [x] T002 [P] Create `specs/001-hierarchical-runtime-dag/contracts/coverage-plan.schema.json`
+- [x] T003 [P] Create `specs/001-hierarchical-runtime-dag/contracts/evidence-shard.schema.json`
+- [x] T004 [P] Create `specs/001-hierarchical-runtime-dag/contracts/domain-finding.schema.json`
+- [x] T005 [P] Create `specs/001-hierarchical-runtime-dag/contracts/validated-situation.schema.json`
+- [x] T006 [P] Create `specs/001-hierarchical-runtime-dag/contracts/decision-record.schema.json`
+- [x] T007 [P] Create `specs/001-hierarchical-runtime-dag/contracts/proposed-action.schema.json`
+- [x] T008 [P] Create `specs/001-hierarchical-runtime-dag/contracts/action-validation.schema.json`
+- [x] T009 [P] Create `specs/001-hierarchical-runtime-dag/contracts/escalation.schema.json`
 
 ### S1-Fixtures & Scaffolding
 
-- [ ] T010 [P] Create `fixtures/inputs/FIXTURE-001-happy-path.json` (Event envelope + payload)
-- [ ] T011 [P] Create `fixtures/inputs/FIXTURE-002-escalation.json` (escalation path)
-- [ ] T012 [P] Create `fixtures/expected/FIXTURE-001-expected.json` (assertion set)
-- [ ] T013 [P] Create `fixtures/expected/FIXTURE-002-expected.json` (assertion set)
-- [ ] T014 [P] Create `src/forgemind/__init__.py` so `import forgemind` succeeds
-- [ ] T015 [P] Create `scripts/run_fixture.py` (fixture-backed Phase 0 validator)
+- [x] T010 [P] Create `fixtures/inputs/FIXTURE-001-happy-path.json` (Event envelope + payload)
+- [x] T011 [P] Create `fixtures/inputs/FIXTURE-002-escalation.json` (escalation path)
+- [x] T012 [P] Create `fixtures/expected/FIXTURE-001-expected.json` (assertion set)
+- [x] T013 [P] Create `fixtures/expected/FIXTURE-002-expected.json` (assertion set)
+- [x] T014 [P] Create `src/forgemind/__init__.py` so `import forgemind` succeeds
+- [x] T015 [P] Create `scripts/run_fixture.py` (fixture-backed Phase 0 validator)
 
 ### S2-Tests
 
-- [ ] T016 [P] Contract test: validate all fixtures load against all 9 contracts (`tests/contract/test_contracts.py`)
-- [ ] T017 [P] Contract test: `pytest tests/contract/` passes 100% (all fixtures → schemas)
-- [ ] T018 [P] Integration test: `tests/integration/test_fixture_run.py` asserts happy-path vs expected
-- [ ] T019 [P] Integration test: `tests/integration/test_escalation_run.py` asserts escalation path
+- [x] T016 [P] Contract test: validate all fixtures load against all 9 contracts (`tests/contract/test_contracts.py`)
+- [x] T017 [P] Contract test: `pytest tests/contract/` passes 100% (all fixtures → schemas)
+- [x] T018 [P] Integration test: `tests/integration/test_fixture_run.py` asserts happy-path vs expected
+- [x] T019 [P] Integration test: `tests/integration/test_fixture_run.py` asserts escalation path
 
 ### S3-Verify & Reconcile
 
-- [ ] T020 Verify `python -c "import forgemind"` succeeds (package importability)
-- [ ] T021 [P] Reconcile `docs/specs/SPEC-001.md` to point at `specs/001-hierarchical-runtime-dag/spec.md` (redirect note)
-- [ ] T022 Update `docs/CURRENT_STATE.md` to Phase 0 complete (incl. status, next task)
-- [ ] T023 [P] Full `pytest tests/` green (brain 5 + secret 6 + new contract/integration)
-- [x] T024 **STOP** — cross-document consistency review — ✅ **PASS 2026-08-23** (dual-verified: Cline planner + SpecForge verifier · report: `reviews/T024-consistency-review.md` · W1–W5 non-blocking)
+- [x] T020 Verify `python -c "import forgemind"` succeeds (package importability)
+- [x] T021 [P] Reconcile `docs/specs/SPEC-001.md` to point at `specs/001-hierarchical-runtime-dag/spec.md` (redirect note)
+- [x] T022 Update `docs/CURRENT_STATE.md` to Phase 0 complete (incl. status, next task)
+- [x] T023 [P] Full `pytest tests/` green (brain 5 + secret 6 + new contract/integration)
+- [x] T024 **STOP** — cross-document consistency review — ✅ **PASS 2026-08-23** (dual-verified: Cline planner + SpecForge verifier · report: `specs/001-hierarchical-runtime-dag/reviews/T024-consistency-review.md` · W1–W5 non-blocking)
 - [ ] T025 [P] Normalization pass (W1–W4): constitution §4.2 field names → contract names (`evidence_shard_ids`, `finding_ids`, `supporting_evidence`, `conflicting_evidence`, `action_id`, `validated_situation_id`); reword `causality_assessment` → "result recorded in `causality_status`" (data-model L119, plan L26, constitution §4.3); fix spec.md L34 heading backtick; unify fixture provenance key → `ingested_at`; reconcile T019 filename (`test_escalation_run.py` → `test_fixture_run.py`). **DEADLINE: before T200 (Phase 2 code-gen).** [W5 `missing_domains` vocabulary → design input for T500]
 
 **Checkpoint**: Phase 0 complete — review gate **CLOSED 2026-08-23** (T024 PASS). Phase 1 unblocked.
