@@ -30,6 +30,8 @@ ForgeMind v3.0 Phase 6 (Tier 5 Decision Reducer + Action Validation + Escalation
 
 **ADR-009 (2026-08-24)** settles the ChromaDB boundary: ChromaDB provides CONTEXT, not AUTHORITY. It is a development-time derived index over boundary-scoped Notion knowledge, consumed only by SpecForge for planning and verification. It is no longer a runtime dependency, is absent from the production image, and the boundary is enforced by `tests/contract/test_runtime_boundary.py` rather than by documentation alone. Runtime ChromaDB integration is DEFERRED to post-M3.
 
+**ADR-007 amended (2026-08-24)**: clause 4 ("every artifact carries `execution_trace_id` + `parent_trace_id`") was never implemented and conflicted with this data-model; it is rewritten to the implemented lineage model — schema-required upstream provenance on every artifact, deterministic `TRC-*` root trace where contracted (CoveragePlan, EvidenceShard), OpenTelemetry span-based distributed tracing deferred to Phase 10 (T1000). Contracts/code/tests unchanged. Pre-M2 ADR tally: 002–006 + 009 fulfilled · 007 fulfilled-as-amended · 001 & 008 unfulfilled (M2/M3 scope). See FAIL-005.
+
 ---
 
 ## 2. Repository Status
@@ -106,7 +108,7 @@ forge-mind/
 │   └── test_secret_handling.py        # 6 tests (FAIL-003 regression guard)
 ├── docs/
 │   ├── CURRENT_STATE.md               # This file
-│   ├── FAILURE_LOG.md                 # Failure log & institutional memory (FAIL-001..FAIL-004)
+│   ├── FAILURE_LOG.md                 # Failure log & institutional memory (FAIL-001..FAIL-005)
 │   ├── ARCHITECTURE.md                # v3.0 architecture reference
 │   ├── PROJECT.md                     # Project vision
 │   └── decisions/                     # ADR-001..ADR-009
@@ -461,4 +463,5 @@ Per `spec.md` Stop Condition:
 *Updated: T024 cross-document consistency review PASS — Phase 0 gate CLOSED (Cline + SpecForge dual verification) — 2026-08-23*  
 *Updated: Phases 1–4 implemented & verified (T100/T200/T300/T400), 90/90 green, pushed through `02be84a`; body sections refreshed to match (Cline) — 2026-08-23*  
 *Updated: Phases 5–6 implemented & verified (T500 validator `4baaafc`; T600 reducer + action gate), 128/128 green, runner 0 errors across 6 fixtures — SPEC-001 M1 local slice COMPLETE (Cline) — 2026-08-24*  
-*Updated: ADR-009 ChromaDB boundary accepted — chromadb reclassified as a dev-only dependency, boundary machine-enforced via `tests/contract/test_runtime_boundary.py`, Knowledge Brain pseudo-test suite removed; baseline 127/127; CVE-2026-45829 absent from the production image (verified in-container); FAIL-004 posture corrected. Implemented by Cline, independently verified by SpecForge (Step 10 PASS). 4 commits pending push — 2026-08-24*
+*Updated: ADR-009 ChromaDB boundary accepted — chromadb reclassified as a dev-only dependency, boundary machine-enforced via `tests/contract/test_runtime_boundary.py`, Knowledge Brain pseudo-test suite removed; baseline 127/127; CVE-2026-45829 absent from the production image (verified in-container); FAIL-004 posture corrected. Implemented by Cline, independently verified by SpecForge (Step 10 PASS). 4 commits pending push — 2026-08-24*  
+*Updated: ADR-007 amended — trace clause rewritten to match the implemented lineage model (provenance everywhere, `TRC-*` root trace where contracted, OTel span tracing deferred to T1000); FAIL-005 recorded for the overstated audit claim; docs-only change, suite re-verified green — 2026-08-24*

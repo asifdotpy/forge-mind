@@ -19,7 +19,7 @@ Event
 Every derived artifact MUST carry:
 - `situation_id` (stable correlation key)
 - `provenance` / upstream ID references
-- `execution_trace_id` (root trace) where applicable
+- `execution_trace_id` (deterministic root trace `TRC-*`) on the artifacts whose contract defines it — per ADR-007 amendment (2026-08-24); parent-child execution telemetry via OpenTelemetry spans (Phase 10)
 
 ## 2. Entity Relationship Diagram (dependency view)
 

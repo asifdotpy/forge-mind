@@ -12,7 +12,7 @@ ADRs document significant architectural, technical, and structural decisions mad
 | [**ADR-004**](file:///home/asif1/forge-mind/docs/decisions/ADR-004-durable-evidence-shards.md) | Workers Emit Durable Evidence Shards | Accepted | Structured `EvidenceShard`s over natural language chat |
 | [**ADR-005**](file:///home/asif1/forge-mind/docs/decisions/ADR-005-cross-lifecycle-validation-tier.md) | Cross-Lifecycle Validation Is a Dedicated Tier | Accepted | Tier 4 multi-domain reconciliation & causality |
 | [**ADR-006**](file:///home/asif1/forge-mind/docs/decisions/ADR-006-separate-decision-reduction.md) | Separate Decision Reduction from Investigation | Accepted | Tier 5 policy evaluation & proposed actions |
-| [**ADR-007**](file:///home/asif1/forge-mind/docs/decisions/ADR-007-dag-and-leaf-worker-constraints.md) | Enforce DAG Invariants and Leaf-Worker Constraints | Accepted | Leaf workers cannot spawn sub-agents; no cycles |
+| [**ADR-007**](file:///home/asif1/forge-mind/docs/decisions/ADR-007-dag-and-leaf-worker-constraints.md) | Enforce DAG Invariants and Leaf-Worker Constraints | Amended (2026-08-24) | Leaf workers cannot spawn sub-agents; no cycles; lineage via schema-required provenance, `TRC-*` root trace where contracted; distributed tracing via OTel in Phase 10 |
 | [**ADR-008**](file:///home/asif1/forge-mind/docs/decisions/ADR-008-adk-2-workflow-runtime.md) | Adopt Google ADK 2 as the ForgeMind Workflow Runtime | Accepted | ADK 2 deterministic orchestration & human gates |
 | [**ADR-009**](file:///home/asif1/forge-mind/docs/decisions/ADR-009-chromadb-development-time-boundary.md) | ChromaDB Is a Development-Time Derived Index | Accepted | Dev-time Knowledge Brain; never runtime state |
 
