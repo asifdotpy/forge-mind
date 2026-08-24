@@ -125,10 +125,10 @@ forge-mind/
 |--------|-------|
 | Working tree | Clean (all phases + ADR-009 boundary work committed) |
 | Branch | `main` tracking `origin/main` |
-| Commits | 36 conventional commits; local HEAD `117272d` — **4 ahead of `origin/main`, not yet pushed** |
+| Commits | 39 conventional commits; local HEAD `e4f18f1` — **7 ahead of `origin/main`, not yet pushed** |
 | Runtime phase commits | T100 acquisition · T200 supervisor · T300 domain managers · T400 workers · tiers wiring · T500 validator · validator wiring · T600 reducer + action gate · reducer wiring |
-| M2 prep commits | `5e807d6` FastAPI + Dockerfile + Cloud Run pipeline · `8e26721` docs/spec alignment · `ea59d55` ADR-009 · `1a66f26` chromadb reclassification · `117272d` Knowledge Brain suite removal |
-| Pending push | 4 commits (`8e26721`, `ea59d55`, `1a66f26`, `117272d`) — awaiting user authorization |
+| M2 prep commits | `5e807d6` FastAPI + Dockerfile + Cloud Run pipeline · `8e26721` docs/spec alignment · `ea59d55` ADR-009 · `1a66f26` chromadb reclassification · `117272d` Knowledge Brain suite removal · `5afcfb7` GCP deployment env docs · `e4f18f1` ADR amendment |
+| Pending push | 7 commits (`8e26721`, `ea59d55`, `1a66f26`, `117272d`, `176dc77`, `5afcfb7`, `e4f18f1`) — awaiting user authorization |
 
 ### 2.3 GitHub Remote (NEW — 2026-08-23)
 
