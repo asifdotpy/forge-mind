@@ -2,7 +2,7 @@
 
 **Date**: 2026-08-24  
 **Phase**: Phase 6 COMPLETE — Tier 5 Decision Reducer + ActionValidation + Escalation  
-**Status**: Phase 6 CLOSED (T600 PASS 2026-08-24) — SPEC-001 five-tier runtime COMPLETE (M1 local slice) 
+**Status**: Phase 6 CLOSED (T600 PASS 2026-08-24) — SPEC-001 five-tier runtime COMPLETE (M1 local slice); ADR-009 ChromaDB boundary accepted and machine-enforced  
 **Branch**: `main` → `origin/main` (github.com/asifdotpy/forge-mind, public)
 
 ---
@@ -14,7 +14,7 @@ ForgeMind v3.0 Phase 6 (Tier 5 Decision Reducer + Action Validation + Escalation
 - All 9 canonical JSON Schema contracts authored and validated
 - 6 fixtures with expected assertions authored and passing
 - `src/forgemind/` package importable
-- `pytest tests/` green (128/128 — 20 baseline + 19 Phase 1 + 18 Phase 2 + 15 Phase 3 + 18 Phase 4 + 15 Phase 5 + 23 Phase 6)
+- `pytest tests/` green (127/127 — 5 contract baseline + 19 Phase 1 + 18 Phase 2 + 15 Phase 3 + 18 Phase 4 + 15 Phase 5 + 23 Phase 6 + 4 ADR-009 boundary + 4 integration + 6 secret-handling)
 - Phase 1 acquisition module (`src/forgemind/acquisition.py`) implements deterministic `Event → CoveragePlan` lineage prefix
 - Phase 2 supervisor module (`src/forgemind/supervisor.py`) implements `Event → CoveragePlan → SupervisorDispatch` trace with global constraint enforcement
 - Phase 3 domain managers (`src/forgemind/domain_managers.py`) implement bounded-domain aggregation: `Event → CoveragePlan → SupervisorDispatch → DomainFinding`
@@ -24,9 +24,11 @@ ForgeMind v3.0 Phase 6 (Tier 5 Decision Reducer + Action Validation + Escalation
 - Phase 6 gate (`src/forgemind/action_gate.py`) implements ActionValidation enforcement plus `publish_terminal_output()` — the structural no-bypass point for every terminal Action/Escalation
 - `specify-cli` 1.0.1 integrated for SDD workflow
 - Notion MCP connected (28 tools)
-- Knowledge Brain boundary enforced (30 pages, 368 chunks)
+- Knowledge Brain boundary enforced (30 pages, 368 chunks) — **development-time tooling only** per ADR-009
 
 **SPEC-001 Definition-of-Done lineage runs end-to-end locally (M1). M2/M3 (cloud deployment, judge surface) remain.**
+
+**ADR-009 (2026-08-24)** settles the ChromaDB boundary: ChromaDB provides CONTEXT, not AUTHORITY. It is a development-time derived index over boundary-scoped Notion knowledge, consumed only by SpecForge for planning and verification. It is no longer a runtime dependency, is absent from the production image, and the boundary is enforced by `tests/contract/test_runtime_boundary.py` rather than by documentation alone. Runtime ChromaDB integration is DEFERRED to post-M3.
 
 ---
 
@@ -99,15 +101,18 @@ forge-mind/
 │   ├── contract/test_workers.py       # 18 Phase 4 tests
 │   ├── contract/test_validator.py     # 15 Phase 5 tests
 │   ├── contract/test_reducer.py       # 23 Phase 6 tests
+│   ├── contract/test_runtime_boundary.py # 4 ADR-009 boundary tests
 │   ├── integration/test_fixture_run.py # 4 tests
-│   ├── test_knowledge_brain.py        # 5 tests
-│   └── test_secret_handling.py        # 6 tests
+│   └── test_secret_handling.py        # 6 tests (FAIL-003 regression guard)
 ├── docs/
 │   ├── CURRENT_STATE.md               # This file
 │   ├── FAILURE_LOG.md                 # Failure log & institutional memory (FAIL-001..FAIL-004)
 │   ├── ARCHITECTURE.md                # v3.0 architecture reference
 │   ├── PROJECT.md                     # Project vision
-│   └── decisions/                     # Decision records directory
+│   └── decisions/                     # ADR-001..ADR-009
+├── Dockerfile                         # Cloud Run container image (uv, --no-dev)
+├── .dockerignore                      # excludes tests/, deploy/, dev brain scripts
+├── deploy/                            # cloudbuild.yaml + deploy.sh (M2)
 ├── pyproject.toml                     # Python deps + dev groups
 └── uv.lock                            # Locked dependencies
 ```
@@ -116,11 +121,12 @@ forge-mind/
 
 | Status | Value |
 |--------|-------|
-| Working tree | Clean (all phases committed and pushed) |
+| Working tree | Clean (all phases + ADR-009 boundary work committed) |
 | Branch | `main` tracking `origin/main` |
-| Commits | 31 conventional commits; local HEAD == remote HEAD (`e6ac46a` — Phase 6 docs) |
+| Commits | 36 conventional commits; local HEAD `117272d` — **4 ahead of `origin/main`, not yet pushed** |
 | Runtime phase commits | T100 acquisition · T200 supervisor · T300 domain managers · T400 workers · tiers wiring · T500 validator · validator wiring · T600 reducer + action gate · reducer wiring |
-| Pending commit | None — all phases committed and pushed |
+| M2 prep commits | `5e807d6` FastAPI + Dockerfile + Cloud Run pipeline · `8e26721` docs/spec alignment · `ea59d55` ADR-009 · `1a66f26` chromadb reclassification · `117272d` Knowledge Brain suite removal |
+| Pending push | 4 commits (`8e26721`, `ea59d55`, `1a66f26`, `117272d`) — awaiting user authorization |
 
 ### 2.3 GitHub Remote (NEW — 2026-08-23)
 
@@ -178,7 +184,7 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 
 | ID | Criterion | Status | Evidence |
 |----|-----------|--------|----------|
-| SC-001 | `pytest tests/contract/` passes | PASS | 113/113 passed (5 baseline + 19 Phase 1 + 18 Phase 2 + 15 Phase 3 + 18 Phase 4 + 15 Phase 5 + 23 Phase 6) |
+| SC-001 | `pytest tests/contract/` passes | PASS | 117/117 passed (5 baseline + 19 Phase 1 + 18 Phase 2 + 15 Phase 3 + 18 Phase 4 + 15 Phase 5 + 23 Phase 6 + 4 ADR-009 boundary) |
 | SC-002 | `pytest tests/integration/` passes | PASS | 4/4 passed |
 | SC-003 | Fixture-001 exits 0, matches expected | PASS | `run_fixture.py` → 0 errors |
 | SC-004 | `src/forgemind` importable | PASS | `import forgemind` succeeds |
@@ -250,13 +256,13 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 
 ## 6. Verification Results
 
-### 6.1 Test Suite (latest run — 2026-08-24)
+### 6.1 Test Suite (latest run — 2026-08-24, post-ADR-009)
 
 ```
 $ .venv/bin/python -m pytest tests/ -q
 ........................................................................ [ 56%]
-........................................................                 [100%]
-128 passed in 5.47s
+.......................................................                  [100%]
+127 passed in 7.26s
 ```
 
 | Suite | Tests |
@@ -268,10 +274,29 @@ $ .venv/bin/python -m pytest tests/ -q
 | `tests/contract/test_workers.py` | 18 (Phase 4) |
 | `tests/contract/test_validator.py` | 15 (Phase 5) |
 | `tests/contract/test_reducer.py` | 23 (Phase 6) |
+| `tests/contract/test_runtime_boundary.py` | 4 (ADR-009 boundary) |
 | `tests/integration/test_fixture_run.py` | 4 |
-| `tests/test_knowledge_brain.py` | 5 |
-| `tests/test_secret_handling.py` | 6 |
-| **Total** | **128** |
+| `tests/test_secret_handling.py` | 6 (FAIL-003 guard) |
+| **Total** | **127** |
+
+**Baseline history**: 90 (Phases 1–4) → 128 (Phases 5–6) → 132 (+4 ADR-009 boundary) → **127** (−5 after removing `tests/test_knowledge_brain.py`, which asserted the contents of a gitignored local ChromaDB index rather than any code behaviour; see ADR-009 §2).
+
+**Every remaining test is independent of the local Knowledge Brain**: the suite runs on a bare clone with no `chromadb` installed and no `NOTION_TOKEN` set.
+
+#### 6.1.1 ADR-009 Boundary Verification (independently reproduced 2026-08-24)
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Deterministic suite, chromadb import-blocked | `PYTHONPATH=<blocker>:src pytest tests/` | 127 passed, 0 failed |
+| Runtime import, chromadb blocked | `python -c "import forgemind"` | OK 0.1.0 |
+| chromadb absent from production image | `docker run … python -c "import chromadb"` | `ModuleNotFoundError` |
+| runtime importable in production image | `docker run … python -c "import forgemind"` | OK 0.1.0 |
+| heavy transitive deps absent from image | `ls site-packages \| grep -iE 'chromadb\|onnxruntime\|tokenizers\|kubernetes'` | NONE PRESENT |
+| dev brain scripts absent from image | `docker run … ls scripts/` | only `run_fixture.py`, `forgemind_boundary.py` |
+| production image size | `docker images forgemind:adr009` | 347 MB (measured) |
+| live container health | `GET /api/v1/health` | `{"status":"ok","service":"forge-mind","version":"0.1.0","phases_complete":6}` |
+| live container pipeline | `POST /api/v1/events` (FIXTURE-006) | terminal `action`, `autonomy_class=safe_autonomous`, ActionValidation `allowed` |
+| dev Knowledge Brain still usable | `python scripts/query_brain.py "…"` | live semantic matches from the 368-chunk index |
 
 ### 6.2 Fixture Runner (latest batch run — all 6 fixtures)
 
@@ -319,12 +344,15 @@ Fixture validation complete. 0 error(s).
 - **Tools**: 28 (notion-search, notion-fetch, notion-create-pages, notion-update-page, etc.)
 - **Status**: `hermes mcp test notion` → ✓ Connected
 
-### 7.3 Notion Knowledge Brain
+### 7.3 Notion Knowledge Brain (development-time only — ADR-009)
 
-- **Boundary**: `scripts/forgemind_boundary.py` — 30 pages in scope
-- **Brain DB**: `.brain_db/`, collection `forgemind_v3_core`, 368 chunks
+- **Role**: derived semantic index over boundary-scoped Notion knowledge, consumed by SpecForge for planning, grounding, consistency review, and cross-session continuity. **CONTEXT, not AUTHORITY** — Notion remains authoritative; on conflict the Truth Hierarchy governs.
+- **Classification**: `chromadb` is a `[dependency-groups].dev` dependency. No runtime tier reads from or writes to it; it is absent from the production image.
+- **Boundary**: `scripts/forgemind_boundary.py` — 30 pages in scope (stdlib only, no chromadb dependency)
+- **Brain DB**: `.brain_db/` (gitignored, 4.7 MB), collection `forgemind_v3_core`, 368 chunks
 - **Last sync**: 2026-08-22 (all 30 pages, 4 batches)
 - **Query interface**: `scripts/query_brain.py` (semantic search, doc_type/page filters)
+- **Tests**: none. The former `tests/test_knowledge_brain.py` asserted the contents of the gitignored local index rather than any code behaviour, so it could not run on another machine or in CI; removed 2026-08-24 (ADR-009 §2). The brain scripts remain as personal development tooling.
 
 ### 7.4 GitHub Integration
 
@@ -382,9 +410,11 @@ Fixture validation complete. 0 error(s).
 |-------|--------|------------|
 | ~~No remote configured~~ ✅ RESOLVED 2026-08-23 | — | `origin` = github.com/asifdotpy/forge-mind (public, hardened) |
 | ~~Runtime tiers NOT implemented~~ ✅ RESOLVED through Tier 5 2026-08-24 | All five tiers shipped (Phases 1–6) | M1 complete; M2/M3 (cloud deployment, judge surface) remain |
-| Dependabot: `chromadb` CRITICAL + `cryptography` advisories | None (mitigated; see FAILURE_LOG FAIL-004) | Accepted with mitigation — embedded Chroma client only, no cryptography usage; re-evaluate on upstream releases |
-| ForgeMind project-memory | Dev-time grounding via ChromaDB (Notion sync) | Runtime memory: planned (M2+) |
-| ~~T024 cross-document consistency review pending~~ ✅ CLOSED 2026-08-23 | Phase 0 exit | PASS (dual-verified Cline + SpecForge); W1–W5 tracked as T025 normalization, due before T200 |
+| Dependabot: `chromadb` CRITICAL (CVE-2026-45829) | **No longer present in the production image** (ADR-009, verified 2026-08-24: `import chromadb` → `ModuleNotFoundError` inside `forgemind:adr009`) | Reclassified as a dev-only dependency. The earlier FAIL-004 mitigation rested on "embedded client only, no network surface" — a premise that weakened once `5e807d6` shipped an `--allow-unauthenticated` Cloud Run service. The package is now absent from that image rather than merely unreachable within it. Still pinned at 1.5.9 for local dev use only (no fixed release published); keep Chroma in embedded mode, never run a networked Chroma server. |
+| Dependabot: `cryptography` HIGH×2/MODERATE | None (mitigated; see FAILURE_LOG FAIL-004) | Accepted with mitigation — ForgeMind code never imports `cryptography`; a `>=49` bump is blocked by `ggshield==1.53.0` (`cryptography<49`). Re-evaluate when ggshield lifts the cap. |
+| ForgeMind project-memory | Dev-time grounding via ChromaDB (Notion sync) — CONTEXT, not AUTHORITY (ADR-009) | Runtime memory: DEFERRED to post-M3; requires a new ADR |
+| T025 normalization pass outstanding | Contract field-name normalization (W1–W4) was deadlined "before T200" but T200–T600 shipped without it | **OPEN** — SpecForge to run a T025 impact audit (affected fields, every consumer/schema/fixture/test, whether still required) immediately before the M2 deployment gate |
+| ~~T024 cross-document consistency review pending~~ ✅ CLOSED 2026-08-23 | Phase 0 exit | PASS (dual-verified Cline + SpecForge); W1–W5 tracked as T025 normalization |
 
 ---
 
@@ -397,8 +427,13 @@ Fixture validation complete. 0 error(s).
 | 3 | ~~Configure GitHub remote and token~~ ✅ DONE 2026-08-23 (public repo asifdotpy/forge-mind) | Cline |
 | 4 | ~~Phases 1–4 runtime implementation~~ ✅ DONE 2026-08-23 — T100/T200/T300/T400 complete, 90/90 green, committed & pushed (`02be84a`) | Cline |
 | 5 | ~~Phases 5–6 runtime implementation~~ ✅ DONE 2026-08-24 — T500 validator + T600 reducer + action gate complete, 128/128 green, committed & pushed (`e6ac46a`) | Cline |
-| 6 | **M2** — Google Cloud deployment (Cloud Run, Artifact Registry, Pub/Sub) | User (with SpecForge planning) |
-| 7 | **M3** — Judge-visible surface (provenance, validation, uncertainty, human control) | User (with SpecForge planning) |
+| 6 | ~~ADR-009 ChromaDB boundary~~ ✅ DONE 2026-08-24 — ADR written, chromadb reclassified as dev-only, boundary machine-enforced (4 tests), Knowledge Brain pseudo-suite removed; 127/127 green; independently verified by SpecForge (Step 10 PASS). 4 commits **awaiting push authorization** | Cline + SpecForge |
+| 7 | **Push the 4 pending commits** to `origin/main` | User authorization required |
+| 8 | **T025 impact audit** — identify affected contract fields, every consumer (schema/fixture/test), and whether normalization is still required; then the smallest corrective task, closed with evidence. **Must precede the M2 deployment gate.** | SpecForge |
+| 9 | **M2 deployment gate** — review readiness; then Google Cloud deployment (Cloud Run, Artifact Registry, Pub/Sub) | User (with SpecForge planning) |
+| 10 | **M3** — Judge-visible surface (provenance, validation, uncertainty, human control) | User (with SpecForge planning) |
+
+**Note on M2 readiness**: the ADR-009 gate proved the *development/runtime boundary* holds and that the container runs FIXTURE-006 end-to-end locally. It did **not** establish M2 readiness — M2 requires FIXTURE-001 passing through a *deployed* Google Cloud application. These are distinct claims and are not to be collapsed.
 
 ---
 
@@ -413,7 +448,7 @@ Per `spec.md` Stop Condition:
 - [x] `contracts/` — all 9 schemas valid (draft-07) *(9/9 SCHEMA-OK, machine-verified 2026-08-23)*
 - [x] `fixtures/` — 2 fixtures + expected assertions pass *(runner exit 0, 0 errors)*
 - [x] `src/forgemind/` importable
-- [x] `pytest tests/` green (20/20 at Phase-0 gate closure; 90/90 as of Phases 1–4)
+- [x] `pytest tests/` green (20/20 at Phase-0 gate closure; 127/127 as of Phases 1–6 + ADR-009)
 - [x] Cross-document consistency review passed (constitution ↔ spec ↔ data-model ↔ plan ↔ tasks ↔ fixtures) — **T024 PASS**, dual-verified (Cline + SpecForge), report: `specs/001-hierarchical-runtime-dag/reviews/T024-consistency-review.md`
 - [x] `docs/CURRENT_STATE.md` updated
 
@@ -425,4 +460,5 @@ Per `spec.md` Stop Condition:
 *Updated: GitHub remote configured & Phase 0 baseline pushed (Cline) — 2026-08-23*  
 *Updated: T024 cross-document consistency review PASS — Phase 0 gate CLOSED (Cline + SpecForge dual verification) — 2026-08-23*  
 *Updated: Phases 1–4 implemented & verified (T100/T200/T300/T400), 90/90 green, pushed through `02be84a`; body sections refreshed to match (Cline) — 2026-08-23*  
-*Updated: Phases 5–6 implemented & verified (T500 validator `4baaafc`; T600 reducer + action gate), 128/128 green, runner 0 errors across 6 fixtures — SPEC-001 M1 local slice COMPLETE (Cline) — 2026-08-24; commit pending*
+*Updated: Phases 5–6 implemented & verified (T500 validator `4baaafc`; T600 reducer + action gate), 128/128 green, runner 0 errors across 6 fixtures — SPEC-001 M1 local slice COMPLETE (Cline) — 2026-08-24*  
+*Updated: ADR-009 ChromaDB boundary accepted — chromadb reclassified as a dev-only dependency, boundary machine-enforced via `tests/contract/test_runtime_boundary.py`, Knowledge Brain pseudo-test suite removed; baseline 127/127; CVE-2026-45829 absent from the production image (verified in-container); FAIL-004 posture corrected. Implemented by Cline, independently verified by SpecForge (Step 10 PASS). 4 commits pending push — 2026-08-24*
