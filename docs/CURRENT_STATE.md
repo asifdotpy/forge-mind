@@ -1,29 +1,32 @@
 # Current State — ForgeMind v3.0
 
-**Date**: 2026-08-23  
-**Phase**: Phase 4 COMPLETE — Tier 3 Specialist Workers  
-**Status**: Phase 4 CLOSED (T400 PASS 2026-08-23) — Phase 5 ready to start  
+**Date**: 2026-08-24  
+**Phase**: Phase 6 COMPLETE — Tier 5 Decision Reducer + ActionValidation + Escalation  
+**Status**: Phase 6 CLOSED (T600 PASS 2026-08-24) — SPEC-001 five-tier runtime COMPLETE (M1 local slice) 
 **Branch**: `main` → `origin/main` (github.com/asifdotpy/forge-mind, public)
 
 ---
 
 ## 1. Executive Summary
 
-ForgeMind v3.0 Phase 4 (Tier 3 Specialist Workers) is **complete** per `specs/001-hierarchical-runtime-dag/plan.md` Phase 4 exit criteria:
+ForgeMind v3.0 Phase 6 (Tier 5 Decision Reducer + Action Validation + Escalation) is **complete** per `specs/001-hierarchical-runtime-dag/plan.md` Phase 6 exit criteria:
 
 - All 9 canonical JSON Schema contracts authored and validated
-- 4 fixtures with expected assertions authored and passing
+- 6 fixtures with expected assertions authored and passing
 - `src/forgemind/` package importable
-- `pytest tests/` green (90/90 — 20 baseline + 19 Phase 1 + 18 Phase 2 + 15 Phase 3 + 18 Phase 4)
+- `pytest tests/` green (128/128 — 20 baseline + 19 Phase 1 + 18 Phase 2 + 15 Phase 3 + 18 Phase 4 + 15 Phase 5 + 23 Phase 6)
 - Phase 1 acquisition module (`src/forgemind/acquisition.py`) implements deterministic `Event → CoveragePlan` lineage prefix
 - Phase 2 supervisor module (`src/forgemind/supervisor.py`) implements `Event → CoveragePlan → SupervisorDispatch` trace with global constraint enforcement
 - Phase 3 domain managers (`src/forgemind/domain_managers.py`) implement bounded-domain aggregation: `Event → CoveragePlan → SupervisorDispatch → DomainFinding`
 - Phase 4 workers (`src/forgemind/workers.py`) implement 6 leaf workers producing durable EvidenceShards: `Event → CoveragePlan → SupervisorDispatch → EvidenceShard`
+- Phase 5 validator (`src/forgemind/validator.py`) implements cross-domain reconciliation: `DomainFinding(s) → ValidatedSituation`
+- Phase 6 reducer (`src/forgemind/reducer.py`) implements the deterministic autonomy ladder: `ValidatedSituation → DecisionRecord → ProposedAction | Escalation`
+- Phase 6 gate (`src/forgemind/action_gate.py`) implements ActionValidation enforcement plus `publish_terminal_output()` — the structural no-bypass point for every terminal Action/Escalation
 - `specify-cli` 1.0.1 integrated for SDD workflow
 - Notion MCP connected (28 tools)
 - Knowledge Brain boundary enforced (30 pages, 368 chunks)
 
-**Phase 5 review gate is the next step** per `spec.md` Stop Condition.
+**SPEC-001 Definition-of-Done lineage runs end-to-end locally (M1). M2/M3 (cloud deployment, judge surface) remain.**
 
 ---
 
@@ -63,19 +66,26 @@ forge-mind/
 │   │   ├── FIXTURE-001-happy-path.json
 │   │   ├── FIXTURE-002-escalation.json
 │   │   ├── FIXTURE-003-domain-evidence.json # all-3-domain EvidenceShards (drives Tier 2)
-│   │   └── FIXTURE-004-workers.json         # per-worker context (drives Tier 3)
+│   │   ├── FIXTURE-004-workers.json         # per-worker context (drives Tier 3)
+│   │   ├── FIXTURE-005-validator.json       # all-3-domain DomainFindings (drives Tier 4)
+│   │   └── FIXTURE-006-decision.json        # verified-causal findings (drives Tier 5 → allowed)
 │   └── expected/
 │       ├── FIXTURE-001-expected.json
 │       ├── FIXTURE-002-expected.json
 │       ├── FIXTURE-003-expected.json
-│       └── FIXTURE-004-expected.json
+│       ├── FIXTURE-004-expected.json
+│       ├── FIXTURE-005-expected.json
+│       └── FIXTURE-006-expected.json
 ├── src/forgemind/
-│   ├── __init__.py                    # Package exports (paths + acquisition + supervisor + domain managers + workers)
+│   ├── __init__.py                    # Package exports (paths + all five tiers + gate)
 │   ├── _paths.py                      # Canonical path constants
 │   ├── acquisition.py                 # Phase 1 event acquisition pipeline
 │   ├── supervisor.py                  # Phase 2 Tier 1 supervisor
 │   ├── domain_managers.py             # Phase 3 Tier 2 domain managers
-│   └── workers.py                     # Phase 4 Tier 3 specialist workers
+│   ├── workers.py                     # Phase 4 Tier 3 specialist workers
+│   ├── validator.py                   # Phase 5 Tier 4 cross-lifecycle validator
+│   ├── reducer.py                     # Phase 6 Tier 5 decision reducer (autonomy ladder)
+│   └── action_gate.py                 # Phase 6 downstream ActionValidation gate + terminal publisher
 ├── scripts/
 │   ├── sync_notion_brain.py           # Notion → ChromaDB sync (with boundary enforcement)
 │   ├── query_brain.py                 # ChromaDB semantic query interface
@@ -87,6 +97,8 @@ forge-mind/
 │   ├── contract/test_supervisor.py    # 18 Phase 2 tests
 │   ├── contract/test_domain_managers.py # 15 Phase 3 tests
 │   ├── contract/test_workers.py       # 18 Phase 4 tests
+│   ├── contract/test_validator.py     # 15 Phase 5 tests
+│   ├── contract/test_reducer.py       # 23 Phase 6 tests
 │   ├── integration/test_fixture_run.py # 4 tests
 │   ├── test_knowledge_brain.py        # 5 tests
 │   └── test_secret_handling.py        # 6 tests
@@ -104,11 +116,11 @@ forge-mind/
 
 | Status | Value |
 |--------|-------|
-| Working tree | Clean |
+| Working tree | Phase 5 + Phase 6 work present, **uncommitted** (docs refresh + T500/T600 implementation) |
 | Branch | `main` tracking `origin/main` |
-| Commits | 25 conventional commits; local HEAD == remote HEAD (`02be84a`) |
-| Baseline commits (2026-08-23) | boundary enforcement, specify-cli dev dep, specforge protocol doc, CURRENT_STATE refresh, LICENSE+README |
-| Runtime phase commits (2026-08-23) | T100 acquisition · T200 supervisor · T300 domain managers · T400 workers · tiers wiring · CURRENT_STATE refresh · FAIL-004 advisory triage |
+| Commits | 27 conventional commits; local HEAD == remote HEAD (`4161a46` — validator wiring) |
+| Runtime phase commits | T100 acquisition · T200 supervisor · T300 domain managers · T400 workers · tiers wiring · T500 validator · validator wiring |
+| Pending commit | Phase 6 reducer + action gate + tests + FIXTURE-006 pair + runner step 9 + docs (ggshield-scan before commit) |
 
 ### 2.3 GitHub Remote (NEW — 2026-08-23)
 
@@ -156,17 +168,17 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 | FR-002 | CoveragePlan emission | PASS | `acquire_event()` emits schema-valid CoveragePlan |
 | FR-003 | Bounded EvidenceShard emission | PASS | `workers.py` emits schema-valid EvidenceShards (`test_each_worker_emits_schema_valid_shard`); bounded-domain guard `WorkerError` on cross-domain context |
 | FR-004 | Domain-bounded aggregation | PASS | `domain_managers.py` aggregates only within its own domain (`DomainError` on cross-domain evidence; `test_cross_domain_evidence_raises_domain_manager_error`) |
-| FR-005 | ValidatedSituation with coverage gaps | SPECIFIED | `validated-situation.schema.json` exists |
-| FR-006 | DecisionRecord/ProposedAction | SPECIFIED | `decision-record.schema.json`, `proposed-action.schema.json` exist |
-| FR-007 | ActionValidation enforcement | SPECIFIED | `action-validation.schema.json` exists |
+| FR-005 | ValidatedSituation with coverage gaps | PASS | `validator.py` reconciles findings; `missing_domains` explicit (`test_validator.py`, FIXTURE-005) |
+| FR-006 | DecisionRecord/ProposedAction | PASS | `reducer.py` autonomy ladder (`DecisionReducer.reduce`; `test_reducer.py` ladder battery, FIXTURE-006) |
+| FR-007 | ActionValidation enforcement | PASS | `action_gate.py` gate + `publish_terminal_output()` no-bypass guard (bypass attempts rejected in tests) |
 | FR-008 | Provenance/upstream references | PASS | `acquire_event()` preserves provenance + references event_id |
-| FR-009 | Explicit uncertainty | SPECIFIED | Schemas include confidence/uncertainty fields |
+| FR-009 | Explicit uncertainty | PASS | Uncertainties preserved verbatim into DecisionRecord/Escalation (`test_uncertainties_preserved_verbatim_into_record`) |
 
 ### 3.4 Success Criteria Status
 
 | ID | Criterion | Status | Evidence |
 |----|-----------|--------|----------|
-| SC-001 | `pytest tests/contract/` passes | PASS | 75/75 passed (5 baseline + 19 Phase 1 + 18 Phase 2 + 15 Phase 3 + 18 Phase 4) |
+| SC-001 | `pytest tests/contract/` passes | PASS | 113/113 passed (5 baseline + 19 Phase 1 + 18 Phase 2 + 15 Phase 3 + 18 Phase 4 + 15 Phase 5 + 23 Phase 6) |
 | SC-002 | `pytest tests/integration/` passes | PASS | 4/4 passed |
 | SC-003 | Fixture-001 exits 0, matches expected | PASS | `run_fixture.py` → 0 errors |
 | SC-004 | `src/forgemind` importable | PASS | `import forgemind` succeeds |
@@ -177,8 +189,8 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 | Story | Priority | Status |
 |-------|----------|--------|
 | US1: Route inbound Event into CoveragePlan | P1 | Phase 2 COMPLETE |
-| US2: Evidence to ValidatedSituation | P1 | Phases 3-4 COMPLETE; Phase 5 gated |
-| US3: Decide, propose, validate, or escalate | P2 | Phase 6 (gated) |
+| US2: Evidence to ValidatedSituation | P1 | Phases 3-5 COMPLETE |
+| US3: Decide, propose, validate, or escalate | P2 | Phase 6 COMPLETE |
 
 ---
 
@@ -193,8 +205,8 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 | **Phase 2** | Tier 1 Supervisor | Trace shows Supervisor → selected Managers + coverage decision | **COMPLETE** (T200) |
 | **Phase 3** | Tier 2 Domain Managers | Concurrent manager execution; no cross-domain reconciliation | **COMPLETE** (T300) |
 | **Phase 4** | Tier 3 Workers | Durable EvidenceShards with provenance; no decisions | **COMPLETE** (T400) |
-| **Phase 5** | Tier 4 Validator | Multi-domain ValidatedSituations reconstructible | GATED |
-| **Phase 6** | Tier 5 Reducer + ActionValidation + Escalation | No final action bypasses validation | GATED |
+| **Phase 5** | Tier 4 Validator | Multi-domain ValidatedSituations reconstructible | **COMPLETE** (T500) |
+| **Phase 6** | Tier 5 Reducer + ActionValidation + Escalation | No final action bypasses validation | **COMPLETE** (T600) — M1 local slice DONE |
 
 ### 4.2 Milestones (BUILD-001)
 
@@ -364,7 +376,7 @@ Fixture validation complete. 0 error(s).
 | Issue | Impact | Resolution |
 |-------|--------|------------|
 | ~~No remote configured~~ ✅ RESOLVED 2026-08-23 | — | `origin` = github.com/asifdotpy/forge-mind (public, hardened) |
-| ~~Runtime tiers NOT implemented~~ ✅ RESOLVED through Tier 3 2026-08-23 | Phases 1–4 shipped | Tier 4 Validator + Tier 5 Reducer remain (Phases 5–6, gated) |
+| ~~Runtime tiers NOT implemented~~ ✅ RESOLVED through Tier 5 2026-08-24 | All five tiers shipped (Phases 1–6) | M1 complete; M2/M3 (cloud deployment, judge surface) remain |
 | Dependabot: `chromadb` CRITICAL + `cryptography` advisories | None (mitigated; see FAILURE_LOG FAIL-004) | Accepted with mitigation — embedded Chroma client only, no cryptography usage; re-evaluate on upstream releases |
 | ForgeMind project-memory ChromaDB not wired | Memory in repo docs | Planned: forge-mind-scoped MCP server |
 | ~~T024 cross-document consistency review pending~~ ✅ CLOSED 2026-08-23 | Phase 0 exit | PASS (dual-verified Cline + SpecForge); W1–W5 tracked as T025 normalization, due before T200 |
@@ -405,4 +417,5 @@ Per `spec.md` Stop Condition:
 *Generated by SpecForge (specforge profile) — 2026-08-22*  
 *Updated: GitHub remote configured & Phase 0 baseline pushed (Cline) — 2026-08-23*  
 *Updated: T024 cross-document consistency review PASS — Phase 0 gate CLOSED (Cline + SpecForge dual verification) — 2026-08-23*  
-*Updated: Phases 1–4 implemented & verified (T100/T200/T300/T400), 90/90 green, pushed through `02be84a`; body sections refreshed to match (Cline) — 2026-08-23*
+*Updated: Phases 1–4 implemented & verified (T100/T200/T300/T400), 90/90 green, pushed through `02be84a`; body sections refreshed to match (Cline) — 2026-08-23*  
+*Updated: Phases 5–6 implemented & verified (T500 validator `4baaafc`; T600 reducer + action gate), 128/128 green, runner 0 errors across 6 fixtures — SPEC-001 M1 local slice COMPLETE (Cline) — 2026-08-24; commit pending*

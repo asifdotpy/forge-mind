@@ -60,12 +60,14 @@ description: "Task list for 001-hierarchical-runtime-dag Phase 0 baseline"
 
 ## Phases 1–6 (gated later — implement after review)
 
-- [ ] T100 Phase 1: Contracts & Event Acquisition (auth, normalization, idempotency, trace IDs)
-- [ ] T200 Phase 2: Tier 1 Supervisor (CoveragePlan generation, dispatch)
-- [ ] T300 Phase 3: Tier 2 Domain Managers (Code/Delivery/Production)
-- [ ] T400 Phase 4: Tier 3 Workers (6 workers; MVP: PR AST + Build Flakiness + Telemetry)
-- [ ] T500 Phase 5: Tier 4 Cross-Lifecycle Validator (ValidatedSituation, causality)
-- [ ] T600 Phase 6: Tier 5 Reducer + ActionValidation + Escalation (no bypass)
+- [x] T100 Phase 1: Contracts & Event Acquisition (auth, normalization, idempotency, trace IDs)
+- [x] T200 Phase 2: Tier 1 Supervisor (CoveragePlan generation, dispatch)
+- [x] T300 Phase 3: Tier 2 Domain Managers (Code/Delivery/Production)
+- [x] T400 Phase 4: Tier 3 Workers (6 workers; MVP: PR AST + Build Flakiness + Telemetry)
+- [x] T500 Phase 5: Tier 4 Cross-Lifecycle Validator (ValidatedSituation, causality)
+- [x] T600 Phase 6: Tier 5 Reducer + ActionValidation + Escalation (no bypass)
+
+**Checkpoint**: Phases 1–6 COMPLETE (2026-08-24). SPEC-001 Definition-of-Done lineage runs end-to-end locally: `Event → CoveragePlan → EvidenceShard → DomainFinding → ValidatedSituation → DecisionRecord → ProposedAction → ActionValidation → Action OR Escalation`. M1 local slice DONE; M2/M3 remain.
 
 ## Dependencies & Execution Order
 
