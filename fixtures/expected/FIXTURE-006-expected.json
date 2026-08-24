@@ -1,0 +1,92 @@
+{
+  "fixture_id": "FIXTURE-006",
+  "kind": "expected-assertions",
+  "version": "3.0",
+  "assertions": [
+    {
+      "artifact": "Event",
+      "schema": "contracts/event.schema.json",
+      "checks": [
+        "event_id == EVT-6000",
+        "situation_id == SIT-6000",
+        "type == incident",
+        "source == fixture",
+        "timestamp is ISO-8601",
+        "payload selects all three domains"
+      ]
+    },
+    {
+      "artifact": "CoveragePlan",
+      "schema": "contracts/coverage-plan.schema.json",
+      "checks": [
+        "produced by Tier 1 Engineering Supervisor",
+        "references situation_id SIT-6000",
+        "selected_domains == [code, delivery, production]",
+        "selected_managers map one per selected domain"
+      ]
+    },
+    {
+      "artifact": "DomainFinding",
+      "schema": "contracts/domain-finding.schema.json",
+      "checks": [
+        "one finding per covered domain supplied in fixture",
+        "finding_id matches ^FND-[A-Za-z0-9-]+$",
+        "references situation_id SIT-6000",
+        "code and delivery findings carry the identical verified causal claim"
+      ]
+    },
+    {
+      "artifact": "ValidatedSituation",
+      "schema": "contracts/validated-situation.schema.json",
+      "checks": [
+        "emitted solely by the Tier 4 CrossLifecycleValidator",
+        "validated_situation_id matches ^VS-[A-Za-z0-9-]+$ (VS-6000-3)",
+        "causality_status verified (verified causal claim corroborated across code+delivery)",
+        "coverage provided_domains == all three domains; missing_domains empty; coverage_percentage == 100",
+        "confidence equals minimum finding confidence (0.88)",
+        "provenance references event_id EVT-6000, coverage_plan_id CP-6000, execution_trace_id TRC-6000, produced_by CrossLifecycleValidator"
+      ]
+    },
+    {
+      "artifact": "DecisionRecord",
+      "schema": "contracts/decision-record.schema.json",
+      "checks": [
+        "produced solely by the Tier 5 DecisionReducer",
+        "decision_record_id matches ^DR-[A-Za-z0-9-]+$ (DR-6000)",
+        "references validated_situation_id VS-6000-3",
+        "autonomy_class == safe_autonomous (confidence 0.88 >= 0.8, causality established, no conflicts, full coverage)",
+        "requires_human == false",
+        "risk_level == low"
+      ]
+    },
+    {
+      "artifact": "ProposedAction",
+      "schema": "contracts/proposed-action.schema.json",
+      "checks": [
+        "action_id matches ^ACT-[A-Za-z0-9-]+$ (ACT-6000)",
+        "decision_id references DR-6000",
+        "required_authority == none",
+        "status proposed at Tier 5; execution authority belongs to the gate"
+      ]
+    },
+    {
+      "artifact": "ActionValidation",
+      "schema": "contracts/action-validation.schema.json",
+      "checks": [
+        "emitted by the downstream Action Validation & Safety Gate",
+        "validation_id matches ^AV-[A-Za-z0-9-]+$ (AV-6000)",
+        "action_id references ACT-6000",
+        "policy_result == allowed (all four checks passed)",
+        "validated_at derived deterministically from the event timestamp (2026-08-23T09:00:00Z), never wall-clock"
+      ]
+    },
+    {
+      "artifact": "Terminal",
+      "checks": [
+        "terminal outcome published exclusively through publish_terminal_output",
+        "outcome == action with status executed (no bypass)",
+        "no Escalation on the allowed path"
+      ]
+    }
+  ]
+}

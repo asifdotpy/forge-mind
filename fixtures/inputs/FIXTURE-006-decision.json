@@ -1,0 +1,116 @@
+{
+  "fixture_id": "FIXTURE-006",
+  "name": "Tier 5 decision reduction to safe autonomous action",
+  "version": "3.0",
+  "purpose": "Provides high-confidence DomainFindings across all three lifecycle domains with a verified causal claim corroborated in two domains, so the Phase-6 fixture runner can drive Tier 5 (DecisionReducer) and the downstream Action Validation gate to a published safe autonomous action: DecisionRecord (safe_autonomous), ProposedAction (proposed -> validated -> executed in-record), ActionValidation (allowed). The escalation counterpart remains FIXTURE-002.",
+  "event": {
+    "event_id": "EVT-6000",
+    "situation_id": "SIT-6000",
+    "type": "incident",
+    "source": "fixture",
+    "summary": "Corroborated causal diagnosis of an auth-service outage supports a safe autonomous remediation decision",
+    "timestamp": "2026-08-23T09:00:00Z",
+    "reference": "https://github.com/example/org/monitoring/incidents/6000",
+    "affected_entities": ["auth-service"],
+    "provenance": {
+      "ingested_at": "2026-08-23T09:00:01Z",
+      "source_system": "fixture-harness",
+      "correlated_signals": 3
+    },
+    "payload": {
+      "scenario": "decision",
+      "deployment": "staging",
+      "affected_domains": ["code", "delivery", "production"]
+    }
+  },
+  "domain_findings": [
+    {
+      "finding_id": "FND-6000-code",
+      "situation_id": "SIT-6000",
+      "domain": "code",
+      "evidence_shard_ids": ["ES-6000-code"],
+      "summary": "Aggregated 1 EvidenceShard(s) for the code domain (CodeIntelligenceManager); verified causal claim present.",
+      "supported_claims": [
+        "verified: reverting the auth-service config change caused the error rate to recover",
+        "the deployed changeset touches the authentication request path"
+      ],
+      "conflicts": [],
+      "coverage": {
+        "domain": "code",
+        "evidence_shard_count": 1,
+        "coverage_scope": "all"
+      },
+      "confidence": 0.92,
+      "uncertainties": [],
+      "provenance": {
+        "event_id": "EVT-6000",
+        "situation_id": "SIT-6000",
+        "coverage_plan_id": "CP-6000",
+        "execution_trace_id": "TRC-6000",
+        "evidence_shard_ids": ["ES-6000-code"],
+        "produced_by": "CodeIntelligenceManager",
+        "spec_phase": "SPEC-001-phase-3-tier-2-domain-managers"
+      },
+      "execution_trace_id": "TRC-6000"
+    },
+    {
+      "finding_id": "FND-6000-delivery",
+      "situation_id": "SIT-6000",
+      "domain": "delivery",
+      "evidence_shard_ids": ["ES-6000-delivery"],
+      "summary": "Aggregated 1 EvidenceShard(s) for the delivery domain (DeliveryHealthManager); corroborates the code-domain causal claim.",
+      "supported_claims": [
+        "verified: reverting the auth-service config change caused the error rate to recover",
+        "the build pipeline reported zero blocking failures for the changeset"
+      ],
+      "conflicts": [],
+      "coverage": {
+        "domain": "delivery",
+        "evidence_shard_count": 1,
+        "coverage_scope": "all"
+      },
+      "confidence": 0.9,
+      "uncertainties": [],
+      "provenance": {
+        "event_id": "EVT-6000",
+        "situation_id": "SIT-6000",
+        "coverage_plan_id": "CP-6000",
+        "execution_trace_id": "TRC-6000",
+        "evidence_shard_ids": ["ES-6000-delivery"],
+        "produced_by": "DeliveryHealthManager",
+        "spec_phase": "SPEC-001-phase-3-tier-2-domain-managers"
+      },
+      "execution_trace_id": "TRC-6000"
+    },
+    {
+      "finding_id": "FND-6000-production",
+      "situation_id": "SIT-6000",
+      "domain": "production",
+      "evidence_shard_ids": ["ES-6000-production"],
+      "summary": "Aggregated 1 EvidenceShard(s) for the production domain (ProductionHealthManager); recovery observed post-revert.",
+      "supported_claims": [
+        "the auth-service error rate recovered after the revert",
+        "the staging deployment preceded the auth-service error spike"
+      ],
+      "conflicts": [],
+      "coverage": {
+        "domain": "production",
+        "evidence_shard_count": 1,
+        "coverage_scope": "all"
+      },
+      "confidence": 0.88,
+      "uncertainties": [],
+      "provenance": {
+        "event_id": "EVT-6000",
+        "situation_id": "SIT-6000",
+        "coverage_plan_id": "CP-6000",
+        "execution_trace_id": "TRC-6000",
+        "evidence_shard_ids": ["ES-6000-production"],
+        "produced_by": "ProductionHealthManager",
+        "spec_phase": "SPEC-001-phase-3-tier-2-domain-managers"
+      },
+      "execution_trace_id": "TRC-6000"
+    }
+  ],
+  "expected_artifacts": ["Event", "CoveragePlan", "DomainFinding", "ValidatedSituation", "DecisionRecord", "ProposedAction", "ActionValidation"]
+}
