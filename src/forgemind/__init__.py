@@ -18,6 +18,13 @@ Phase 5 (SPEC-001 T500 — Tier 4 Cross-Lifecycle Validator): exposes
 selected domains into a single ``ValidatedSituation`` — the sole tier
 authorized to reconcile evidence across domain boundaries, and the source
 of truth consumed by the Tier 5 Decision Reducer (Phase 6).
+
+Phase 6 (SPEC-001 T600 — Tier 5 Decision Reducer + ActionValidation +
+Escalation): exposes :class:`DecisionReducer` (the sole tier authorized to
+convert a ValidatedSituation into an operational decision, per ADR-006)
+and the downstream safety gate — :class:`ActionValidationGate` plus
+:func:`publish_terminal_output`, the structural no-bypass point through
+which every terminal Action or Escalation must flow.
 """
 
 __version__ = "0.1.0"
@@ -57,17 +64,33 @@ from forgemind.workers import (
     WorkerRegistry,
 )
 from forgemind.validator import CrossLifecycleValidator, ValidatorError
+from forgemind.reducer import (
+    AUTONOMOUS_CONFIDENCE,
+    ESCALATE_CONFIDENCE,
+    DecisionReducer,
+    ReducerError,
+)
+from forgemind.action_gate import (
+    ActionGateError,
+    ActionValidationGate,
+    publish_terminal_output,
+)
 
 __all__ = [
+    "AUTONOMOUS_CONFIDENCE",
+    "ActionGateError",
+    "ActionValidationGate",
     "AlertStormClusteringWorker",
     "BuildLogAndFlakinessWorker",
     "CONTRACTS_DIR",
     "CodeIntelligenceManager",
     "CrossLifecycleValidator",
+    "DecisionReducer",
     "DeliveryHealthManager",
     "DocsDriftAndSpecWorker",
     "DomainError",
     "DomainManagerError",
+    "ESCALATE_CONFIDENCE",
     "EventValidationError",
     "FIXTURES_EXPECTED_DIR",
     "FIXTURES_INPUT_DIR",
@@ -88,6 +111,7 @@ __all__ = [
     "WorkerRegistry",
     "acquire_event",
     "persist_artifacts",
+    "publish_terminal_output",
     "smoke",
 ]
 

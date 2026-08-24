@@ -31,6 +31,16 @@ validated-situation.schema.json and checks coverage accounting (missing
 domains flagged, never silent), provenance lineage, and the no-decision-
 artifact boundary guard.  Fixtures without ``domain_findings`` are unaffected.
 
+Phase 6 scope (T600 — Tier 5 Reducer + ActionValidation + Escalation): any
+ValidatedSituation produced above is reduced by the Tier 5 DecisionReducer
+(deterministic autonomy ladder) and, when an action is proposed, driven
+through the downstream Action Validation gate and published via
+``publish_terminal_output`` — the sole terminal-output producer.  Fixtures
+whose expected artifacts include "Escalation" but carry no findings
+(FIXTURE-002) have their situation synthesized by validating an EMPTY
+finding set: the honest zero-confidence, coverage-gapped picture MUST
+escalate, never act.
+
 Usage:
     python scripts/run_fixture.py                                            # all fixtures
     python scripts/run_fixture.py fixtures/inputs/FIXTURE-001-happy-path.json
@@ -56,6 +66,12 @@ from forgemind.supervisor import Supervisor, SupervisorError
 from forgemind.domain_managers import DomainError, ManagerCoordinator
 from forgemind.workers import WorkerCoordinator, WorkerError
 from forgemind.validator import CrossLifecycleValidator, ValidatorError
+from forgemind.reducer import DecisionReducer, ReducerError
+from forgemind.action_gate import (
+    ActionGateError,
+    ActionValidationGate,
+    publish_terminal_output,
+)
 
 
 def load_json(path):
@@ -308,6 +324,8 @@ def validate_fixture(fixture_path: Path, out_dir=None) -> int:
                 print(f"[FAIL] {fid}: {worker_name} worker failed -> {message}")
                 errors += 1
 
+    validated = None  # ValidatedSituation produced in step 8, consumed by 9
+
     # 8) Phase 5 (T500): if the fixture carries DomainFindings (the
     #    ``domain_findings`` array), run the Tier 4 Cross-Lifecycle Validator
     #    over the CoveragePlan + findings and validate the emitted
@@ -392,7 +410,146 @@ def validate_fixture(fixture_path: Path, out_dir=None) -> int:
                 )
                 errors += 1
 
-    # 9) Optional durability demonstration (--out DIR).
+    # 9) Phase 6 (T600): reduce any ValidatedSituation through Tier 5 and
+    #    drive proposed actions through the downstream Action Validation
+    #    gate.  Escalation-class situations MUST NOT carry a proposed
+    #    action; allowed actions are published as terminal Actions ONLY by
+    #    publish_terminal_output (structural no-bypass point).
+    if validated is None and "Escalation" in fixture.get(
+        "expected_artifacts", []
+    ):
+        # Escalation-semantics bridge (FIXTURE-002): no findings supplied.
+        # Reconcile an EMPTY finding set so Tier 5 sees the honest
+        # zero-confidence, coverage-gapped picture instead of an invented
+        # one; the ladder must then escalate rather than act.
+        try:
+            validated = CrossLifecycleValidator().validate(plan, [])
+        except ValidatorError as exc:
+            print(f"[FAIL] {fid}: validator rejected empty finding set -> {exc}")
+            errors += 1
+
+    if validated is not None:
+        try:
+            reduction = DecisionReducer().reduce(validated)
+        except ReducerError as exc:
+            print(f"[FAIL] {fid}: DecisionReducer rejected situation -> {exc}")
+            errors += 1
+        else:
+            record = reduction["decision_record"]
+            action = reduction["proposed_action"]
+            escalation = reduction["escalation"]
+            try:
+                jsonschema.validate(
+                    record,
+                    load_json(CONTRACTS_DIR / "decision-record.schema.json"),
+                )
+                if action is not None:
+                    jsonschema.validate(
+                        action,
+                        load_json(CONTRACTS_DIR / "proposed-action.schema.json"),
+                    )
+                if escalation is not None:
+                    jsonschema.validate(
+                        escalation,
+                        load_json(CONTRACTS_DIR / "escalation.schema.json"),
+                    )
+            except jsonschema.ValidationError as exc:
+                print(f"[FAIL] {fid}: Tier 5 artifact vs contract -> {exc.message}")
+                errors += 1
+
+            tier5_ok = (
+                (action is None) != (escalation is None)
+                and record["validated_situation_id"]
+                == validated["validated_situation_id"]
+                and (
+                    action is None
+                    or action["decision_id"] == record["decision_record_id"]
+                )
+                and (
+                    escalation is None
+                    or escalation["situation_id"] == plan["situation_id"]
+                )
+                and (
+                    record["autonomy_class"] != "escalate"
+                    or record["requires_human"]
+                )
+            )
+            if not tier5_ok:
+                print(
+                    f"[FAIL] {fid}: Tier 5 reduction incoherent "
+                    "(terminal branch, lineage or escalation guard failed)"
+                )
+                errors += 1
+            elif escalation is not None:
+                print(
+                    f"[ok] {fid}: DecisionRecord {record['decision_record_id']} "
+                    f"reduced to ESCALATION {escalation['escalation_id']} "
+                    f"(reason={escalation['reason']}, "
+                    f"requires_human={record['requires_human']})"
+                )
+                print(
+                    f"[ok] {fid}: no autonomous action executed for "
+                    f"{plan['situation_id']} (human role: "
+                    f"{escalation['required_human_role']})"
+                )
+            else:
+                print(
+                    f"[ok] {fid}: DecisionRecord {record['decision_record_id']} "
+                    f"reduced situation {plan['situation_id']} "
+                    f"(autonomy_class={record['autonomy_class']}, "
+                    f"risk_level={record['risk_level']})"
+                )
+
+            if action is not None:
+                try:
+                    gated = ActionValidationGate().validate(
+                        action,
+                        record,
+                        event_timestamp=event["timestamp"],
+                    )
+                except ActionGateError as exc:
+                    print(f"[FAIL] {fid}: Action gate rejected input -> {exc}")
+                    errors += 1
+                else:
+                    av = gated["action_validation"]
+                    try:
+                        jsonschema.validate(
+                            av,
+                            load_json(
+                                CONTRACTS_DIR / "action-validation.schema.json"
+                            ),
+                        )
+                    except jsonschema.ValidationError as exc:
+                        print(
+                            f"[FAIL] {fid}: ActionValidation vs contract -> "
+                            f"{exc.message}"
+                        )
+                        errors += 1
+                    try:
+                        published = publish_terminal_output(
+                            gated["proposed_action"],
+                            av,
+                            situation_id=plan["situation_id"],
+                            evidence_ids=validated.get("evidence_ids") or [],
+                        )
+                    except ActionGateError as exc:
+                        print(f"[FAIL] {fid}: terminal publish refused -> {exc}")
+                        errors += 1
+                    else:
+                        print(
+                            f"[ok] {fid}: ActionValidation {av['validation_id']} "
+                            f"policy_result={av['policy_result']} (checks passed: "
+                            f"{sum(1 for c in av['checks'] if c['passed'])}/"
+                            f"{len(av['checks'])}; validated_at={av['validated_at']})"
+                        )
+                        print(
+                            f"[ok] {fid}: terminal outcome "
+                            f"'{published['terminal']}' published "
+                            f"({published['action']['status']}; no-bypass "
+                            "invariant held)"
+                        )
+
+    # 10) Optional durability demonstration (--out DIR).
     if out_dir is not None:
         for path in persist_artifacts(acquired, out_dir):
             print(f"[ok] {fid}: persisted {path}")
