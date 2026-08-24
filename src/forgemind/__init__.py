@@ -76,6 +76,13 @@ from forgemind.action_gate import (
     publish_terminal_output,
 )
 
+# SPEC-001 M2 (Cloud Run deployment prep): expose the FastAPI application
+# factory.  Placed LAST on purpose — forgemind.api imports submodules
+# directly (never the partially-initialized package namespace), so this
+# cannot cause a circular import.  Requires fastapi/uvicorn, which are
+# declared as hard dependencies in pyproject.toml.
+from forgemind.api import create_api
+
 __all__ = [
     "AUTONOMOUS_CONFIDENCE",
     "ActionGateError",
@@ -110,6 +117,7 @@ __all__ = [
     "WorkerError",
     "WorkerRegistry",
     "acquire_event",
+    "create_api",
     "persist_artifacts",
     "publish_terminal_output",
     "smoke",

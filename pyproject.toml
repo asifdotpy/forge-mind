@@ -8,7 +8,19 @@ dependencies = [
     "chromadb>=0.5.0",
     "requests>=2.31.0",
     "jsonschema>=4.0.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
 ]
+
+[build-system]
+# Required so tooling (pip / uv / Docker) can build & install forge-mind
+# as a real package from the src/ layout; without it uv treats the
+# project as virtual and never installs it into the venv/image.
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [project.optional-dependencies]
 # Optional extras (none currently). Dev tooling lives in [dependency-groups].

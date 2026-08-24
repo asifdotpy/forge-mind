@@ -1,0 +1,51 @@
+# Cloud Build pipeline: build -> push -> deploy ForgeMind to Cloud Run.
+#
+# Usage (usually via deploy/deploy.sh):
+#   gcloud builds submit --config deploy/cloudbuild.yaml \
+#     --substitutions=_REGION=us-central1,_AR_REPO=cloud-run-source-deploy,_SERVICE=forgemind .
+#
+# Images are stored in Artifact Registry (gcr.io pushes are retired).
+
+steps:
+  # 1) Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$COMMIT_SHA'
+      - '.'
+
+  # 2) Push the container image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$COMMIT_SHA'
+
+  # 3) Deploy the image to Cloud Run (managed)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE}'
+      - '--image'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$COMMIT_SHA'
+      - '--region'
+      - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+
+# Keep the pushed image in the registry.
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$COMMIT_SHA'
+
+substitutions:
+  _REGION: us-central1
+  _AR_REPO: cloud-run-source-deploy
+  _SERVICE: forgemind
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: '1200s'

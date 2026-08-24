@@ -1,0 +1,42 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+.githooks
+.github
+
+# Python development artifacts
+.venv
+__pycache__
+*.py[cod]
+*.pyc
+.pytest_cache
+*.egg-info
+
+# Local state, caches, secrets
+.brain_db
+.cache_ggshield
+.env
+.env.*
+var/
+
+# Tooling directories not needed in the runtime image
+.agents
+.hermes
+.hermes.md
+.specify
+.vscode
+.idea
+
+# Documentation (PROJECT.md kept: pyproject `readme` references it)
+docs/*
+!docs/PROJECT.md
+
+# Not shipped in the runtime image
+tests/
+deploy/
+
+# Repository meta files
+LICENSE
+README.md
+AGENTS.md
