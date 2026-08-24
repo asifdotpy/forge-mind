@@ -5,7 +5,6 @@ description = "Hierarchical Multi-Agent Cognitive Operating System"
 readme = "docs/PROJECT.md"
 requires-python = ">=3.11"
 dependencies = [
-    "chromadb>=0.5.0",
     "requests>=2.31.0",
     "jsonschema>=4.0.0",
     "fastapi>=0.115.0",
@@ -30,7 +29,15 @@ dev = [
     "pytest>=8.0.0",
     "ggshield>=1.53.0",
     "specify-cli>=1.0.1",
+    # Dev-time Knowledge Brain index only — NOT runtime state (ADR-009).
+    # ChromaDB provides CONTEXT, not AUTHORITY. Never move this to
+    # [project].dependencies: no runtime tier may depend on it.
+    "chromadb>=0.5.0",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+addopts = "--strict-markers"
+markers = [
+    "brain: requires the dev-time ChromaDB Knowledge Brain index (ADR-009); skipped when chromadb or .brain_db is absent",
+]

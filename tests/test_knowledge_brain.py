@@ -1,6 +1,20 @@
 import os
+
 import pytest
-import chromadb
+
+# ADR-009: chromadb is a dev-time Knowledge Brain dependency, never a runtime
+# one. This module must skip cleanly — never fail or error — when either the
+# chromadb package or the synced .brain_db/ index is absent (bare clone / CI).
+chromadb = pytest.importorskip(
+    "chromadb", reason="dev-time Knowledge Brain index (ADR-009)"
+)
+
+pytestmark = pytest.mark.brain
+
+if not os.path.exists(
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".brain_db")
+):
+    pytest.skip("no .brain_db; run scripts/sync_notion_brain.py", allow_module_level=True)
 
 DB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".brain_db")
 COLLECTION_NAME = "forgemind_v3_core"

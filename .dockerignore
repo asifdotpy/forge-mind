@@ -36,6 +36,10 @@ docs/*
 tests/
 deploy/
 
+# Dev-time Knowledge Brain tooling — chromadb is a dev dependency (ADR-009)
+scripts/sync_notion_brain.py
+scripts/query_brain.py
+
 # Repository meta files
 LICENSE
 README.md

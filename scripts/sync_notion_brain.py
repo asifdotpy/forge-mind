@@ -18,8 +18,6 @@ import urllib.error
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Tuple, Optional
 
-import chromadb
-
 ROOT_PAGE_ID = "3be6566c-d850-812b-910c-deb6500bf6c1"
 PAGE_TITLE = "ForgeMind — Hierarchical Engineering Agent System"
 DB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".brain_db")
@@ -421,6 +419,10 @@ class NotionCrawler:
                     print(f"    ⚠️ Error querying database {db_id}: {e}", file=sys.stderr, flush=True)
 
 def main():
+    # Imported lazily: chromadb is a dev-only dependency (ADR-009) and this
+    # module is also imported by tests that only need get_notion_token().
+    import chromadb
+
     token = get_notion_token()
     print("=" * 80, flush=True)
     print("🚀 Starting ForgeMind v3.0 Knowledge Brain Synchronization", flush=True)

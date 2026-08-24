@@ -613,7 +613,6 @@ name = "forge-mind"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "chromadb" },
     { name = "fastapi" },
     { name = "jsonschema" },
     { name = "requests" },
@@ -622,6 +621,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "chromadb" },
     { name = "ggshield" },
     { name = "pytest" },
     { name = "specify-cli" },
@@ -629,7 +629,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "chromadb", specifier = ">=0.5.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "jsonschema", specifier = ">=4.0.0" },
     { name = "requests", specifier = ">=2.31.0" },
@@ -638,6 +637,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "chromadb", specifier = ">=0.5.0" },
     { name = "ggshield", specifier = ">=1.53.0" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "specify-cli", specifier = ">=1.0.1" },
