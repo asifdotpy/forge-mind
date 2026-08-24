@@ -37,7 +37,3 @@ dev = [
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
-addopts = "--strict-markers"
-markers = [
-    "brain: requires the dev-time ChromaDB Knowledge Brain index (ADR-009); skipped when chromadb or .brain_db is absent",
-]

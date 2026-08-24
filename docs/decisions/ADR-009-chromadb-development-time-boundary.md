@@ -9,7 +9,7 @@ ForgeMind maintains a local Knowledge Brain: a ChromaDB vector index built from 
 An audit of that dependency surfaced two defects:
 
 1. **Packaging**: `chromadb` was declared in `[project].dependencies`, so `uv sync --frozen --no-dev` installed it into the production Cloud Run image even though no runtime tier ever imports it (`src/forgemind/` contains zero `chroma` references; `import forgemind` succeeds with `chromadb` blocked; 117 contract+integration tests pass under an import block). The pinned version carries CVE-2026-45829 (CRITICAL, no fixed release published), and `cloudbuild.yaml` deploys the image `--allow-unauthenticated` — an unreachable CVE sitting on an internet-facing service. FAIL-004 (`docs/FAILURE_LOG.md`) documents why no satisfying version bump exists.
-2. **Test coupling**: `tests/test_secret_handling.py` — the FAIL-003 security regression guard — failed without chromadb solely because it executes `scripts/sync_notion_brain.py`, whose module-level `import chromadb` was unrelated to what those tests exercise; `tests/test_knowledge_brain.py` errored at collection instead of skipping cleanly.
+2. **Test coupling**: `tests/test_secret_handling.py` — the FAIL-003 security regression guard — failed without chromadb solely because it executes `scripts/sync_notion_brain.py`, whose module-level `import chromadb` was unrelated to what those tests exercise. Separately, `tests/test_knowledge_brain.py` errored at collection: it asserted the contents of a gitignored local index rather than any code behaviour.
 
 The principle that resolves both:
 
@@ -19,7 +19,7 @@ ChromaDB is a derived semantic index over boundary-scoped Notion knowledge, cons
 
 ## Decision
 1. Classify ChromaDB as a **development-time dependency** (`[dependency-groups].dev`). It MUST NOT be a runtime dependency: no runtime tier may read from or write to it, and it is excluded from the production image.
-2. Exclude dev-time Knowledge Brain tooling (`scripts/sync_notion_brain.py`, `scripts/query_brain.py`) from the production image; mark Knowledge Brain tests with the registered `brain` marker so they skip cleanly when the index or chromadb is absent.
+2. Exclude dev-time Knowledge Brain tooling (`scripts/sync_notion_brain.py`, `scripts/query_brain.py`) from the production image. The Knowledge Brain is personal development tooling: its scripts are retained, but it carries no automated test suite. The former `tests/test_knowledge_brain.py` asserted the state of one developer's gitignored local index (chunk counts, metadata keys, semantic-query results) rather than the correctness of any code, so it could never run on another machine or in CI and was removed rather than guarded.
 3. Enforce the boundary mechanically via `tests/contract/test_runtime_boundary.py`.
 4. Runtime ChromaDB integration is **DEFERRED to post-M3**; introducing it requires a new ADR.
 
