@@ -104,6 +104,11 @@ MODULES = [
     "forgemind.reducer",
     "forgemind.action_gate",
     "forgemind.api",
+    # M3-B (ADR-010): the new runtime modules must NOT import chromadb.
+    # They are appended here (not weakening the existing ChromaDB blockers)
+    # so the import surface stays machine-enforced.
+    "forgemind.llm",
+    "forgemind.adk_runtime",
 ]
 
 for _name in MODULES:
@@ -128,3 +133,94 @@ print("RUNTIME_IMPORTS_OK")
         f"blocked.\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     )
     assert "RUNTIME_IMPORTS_OK" in result.stdout
+
+
+def test_llm_module_does_not_import_chroma():
+    """forgemind.llm (M3-B adapter) imports with chromadb blocked (ADR-009)."""
+    child_code = r'''
+import importlib
+import sys
+
+
+class _ChromaBlocker:
+    def find_spec(self, name, path=None, target=None):
+        if name == "chromadb" or name.startswith("chromadb."):
+            raise ImportError("AUDIT-BLOCKED by ADR-009 boundary test: " + name)
+        return None
+
+
+sys.meta_path.insert(0, _ChromaBlocker())
+
+try:
+    importlib.import_module("chromadb")
+except ImportError:
+    pass
+else:
+    raise SystemExit("internal error: blocker failed to block chromadb")
+
+importlib.import_module("forgemind.llm")
+importlib.import_module("forgemind.llm.adapter")
+print("LLM_IMPORTS_OK")
+'''
+
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO_ROOT / "src")
+
+    result = subprocess.run(
+        [sys.executable, "-c", child_code],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        env=env,
+        timeout=120,
+    )
+    assert result.returncode == 0, (
+        "ADR-009 violation: forgemind.llm failed to import with chromadb blocked. "
+        f"stdout: {result.stdout} stderr: {result.stderr}"
+    )
+    assert "LLM_IMPORTS_OK" in result.stdout
+
+
+def test_adk_runtime_imports_with_chroma_blocked():
+    """forgemind.adk_runtime (M3-B ADK workflow) imports w/ chroma blocked."""
+    child_code = r'''
+import importlib
+import sys
+
+
+class _ChromaBlocker:
+    def find_spec(self, name, path=None, target=None):
+        if name == "chromadb" or name.startswith("chromadb."):
+            raise ImportError("AUDIT-BLOCKED by ADR-009 boundary test: " + name)
+        return None
+
+
+sys.meta_path.insert(0, _ChromaBlocker())
+
+try:
+    importlib.import_module("chromadb")
+except ImportError:
+    pass
+else:
+    raise SystemExit("internal error: blocker failed to block chromadb")
+
+importlib.import_module("forgemind.adk_runtime")
+print("ADK_RUNTIME_IMPORTS_OK")
+'''
+
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO_ROOT / "src")
+
+    result = subprocess.run(
+        [sys.executable, "-c", child_code],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        env=env,
+        timeout=120,
+    )
+    assert result.returncode == 0, (
+        "ADR-009 violation: forgemind.adk_runtime failed to import with chromadb blocked. "
+        f"stdout: {result.stdout} stderr: {result.stderr}"
+    )
+    assert "ADK_RUNTIME_IMPORTS_OK" in result.stdout

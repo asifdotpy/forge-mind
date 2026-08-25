@@ -316,12 +316,34 @@ class PRPreFlightASTWorker(Worker):
         return "pr-pre-flight-ast-worker"
 
     def _observations(self, context: dict) -> list:
+        # ADR-010 / M3-B: allow Gemini (via Vertex) to fill the FREE-TEXT
+        # observations when credentials are configured; otherwise (or on ANY
+        # model error) fall back to the deterministic extraction below.  The
+        # model output is treated as text ONLY — it never alters schema,
+        # provenance, confidence, or any other shard field.
+        try:
+            from forgemind.llm.adapter import generate_observations
+
+            model_obs = generate_observations("code", context)
+        except Exception:
+            model_obs = None
+        if model_obs is not None:
+            return model_obs
         changed = context.get("inputs", {}).get("changed_files") or []
         return [f"changed file in changeset: {f}" for f in changed] or [
             "no changed files recorded in context"
         ]
 
     def _claims(self, context: dict) -> list:
+        # Same bounded Gemini-backing discipline as ``_observations``.
+        try:
+            from forgemind.llm.adapter import generate_claims
+
+            model_claims = generate_claims("code", context)
+        except Exception:
+            model_claims = None
+        if model_claims is not None:
+            return model_claims
         changed = context.get("inputs", {}).get("changed_files") or []
         if changed:
             return [

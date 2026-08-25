@@ -53,7 +53,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -72,6 +72,12 @@ from forgemind.reducer import DecisionReducer, ReducerError
 from forgemind.supervisor import Supervisor, SupervisorError
 from forgemind.validator import CrossLifecycleValidator, ValidatorError
 from forgemind.workers import WorkerCoordinator, WorkerError
+from forgemind.adk_runtime import (
+    ApprovalError,
+    is_adk_runtime,
+    resume_adk_pipeline,
+    run_adk_pipeline,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +115,15 @@ class EventInput(BaseModel):
     evidence_shards: Optional[List[Dict[str, Any]]] = None
     #: Optional DomainFindings handed directly to the Tier 4 validator.
     domain_findings: Optional[List[Dict[str, Any]]] = None
+
+
+class ApprovalDecision(BaseModel):
+    """Request body for ``POST /api/v1/approvals/{token}`` (ADK M3-B)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    #: Human decision on a PAUSED workflow: approve (publish) or reject.
+    decision: Literal["approve", "reject"]
 
 
 def run_pipeline(body: EventInput) -> Dict[str, Any]:
@@ -427,6 +442,8 @@ def create_api() -> FastAPI:
         """Ingest an Event, run the full five-tier pipeline, and return the
         terminal outcome plus every intermediate artifact."""
         try:
+            if is_adk_runtime():
+                return run_adk_pipeline(body)
             return run_pipeline(body)
         except EventValidationError as exc:
             logger.warning("event validation failed: %s", exc)
@@ -532,6 +549,37 @@ def create_api() -> FastAPI:
             "name": name,
             "contract": json.loads(path.read_text(encoding="utf-8")),
         }
+
+    @app.post("/api/v1/approvals/{token}")
+    async def approve(token: str, decision: ApprovalDecision):
+        """Human-approval resume endpoint for the ADK M3-B pause gate.
+
+        A workflow PAUSED at the ``human_approval`` node (because the Action
+        Validation gate returned ``requires_human``) exposes a
+        ``pending_approval.token`` and this resume endpoint.  Posting
+        ``{"decision": "approve"}`` publishes the gated outcome; posting
+        ``{"decision": "reject"}`` records an Escalation and publishes no
+        action.  Under the default ``deterministic`` runtime this endpoint is
+        inert and returns 404 (no workflows are ever paused there).
+        """
+        if not is_adk_runtime():
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": "not_found",
+                    "detail": (
+                        "human-approval resume is only available when "
+                        "FORGEMIND_RUNTIME=adk"
+                    ),
+                },
+            )
+        try:
+            return resume_adk_pipeline(token, decision.decision)
+        except ApprovalError as exc:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "not_found", "detail": str(exc)},
+            )
 
     return app
 

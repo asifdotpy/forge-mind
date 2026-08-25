@@ -9,6 +9,10 @@ dependencies = [
     "jsonschema>=4.0.0",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
+    # M3-B (ADR-010): Gemini 3.5 via Vertex AI, called lazily inside
+    # forgemind.llm.adapter. Runtime dependency (NOT dev) — it is required
+    # in the Cloud Run image so the bounded Gemini node can run.
+    "google-genai>=2.19.0",
 ]
 
 [build-system]
