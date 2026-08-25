@@ -109,6 +109,9 @@ MODULES = [
     # so the import surface stays machine-enforced.
     "forgemind.llm",
     "forgemind.adk_runtime",
+    # Change 2: the self-contained event context derivation module is
+    # runtime-only and must stay free of chromadb (ADR-009).
+    "forgemind.worker_contexts",
 ]
 
 for _name in MODULES:
@@ -224,3 +227,48 @@ print("ADK_RUNTIME_IMPORTS_OK")
         f"stdout: {result.stdout} stderr: {result.stderr}"
     )
     assert "ADK_RUNTIME_IMPORTS_OK" in result.stdout
+
+
+def test_worker_contexts_imports_with_chroma_blocked():
+    """forgemind.worker_contexts (Change 2) imports w/ chroma blocked."""
+    child_code = r'''
+import importlib
+import sys
+
+
+class _ChromaBlocker:
+    def find_spec(self, name, path=None, target=None):
+        if name == "chromadb" or name.startswith("chromadb."):
+            raise ImportError("AUDIT-BLOCKED by ADR-009 boundary test: " + name)
+        return None
+
+
+sys.meta_path.insert(0, _ChromaBlocker())
+
+try:
+    importlib.import_module("chromadb")
+except ImportError:
+    pass
+else:
+    raise SystemExit("internal error: blocker failed to block chromadb")
+
+importlib.import_module("forgemind.worker_contexts")
+print("WORKER_CONTEXTS_IMPORTS_OK")
+'''
+
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO_ROOT / "src")
+
+    result = subprocess.run(
+        [sys.executable, "-c", child_code],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        env=env,
+        timeout=120,
+    )
+    assert result.returncode == 0, (
+        "ADR-009 violation: forgemind.worker_contexts failed to import with "
+        f"chromadb blocked.\nstdout: {result.stdout} stderr: {result.stderr}"
+    )
+    assert "WORKER_CONTEXTS_IMPORTS_OK" in result.stdout

@@ -147,6 +147,15 @@ def run_pipeline(body: EventInput) -> Dict[str, Any]:
     if body.workers:
         worker_outcome = WorkerCoordinator().dispatch(plan, body.workers)
         shards.extend(worker_outcome["shards"])
+    else:
+        # Change 2: derive deterministic contexts from the event payload so a
+        # raw event is self-sufficient (no hand-rolled workers key required).
+        from forgemind.worker_contexts import build_worker_contexts
+
+        derived = build_worker_contexts(event, plan)
+        if derived:
+            worker_outcome = WorkerCoordinator().dispatch(plan, derived)
+            shards.extend(worker_outcome["shards"])
 
     # Tier 2 — Domain Managers: aggregate shards into bounded DomainFindings.
     findings_by_domain: Dict[str, Dict[str, Any]] = {}

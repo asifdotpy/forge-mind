@@ -25,6 +25,18 @@
       "deployment_target": "staging"
     }
   },
+  "workers": {
+    "pr-pre-flight-ast-worker": {
+      "domain": "code",
+      "inputs": {
+        "changed_files": ["auth/config.go", "auth/controller.go"]
+      },
+      "confidence": 0.7,
+      "risk_level": "low",
+      "affected_entities": ["auth-service", "config"],
+      "uncertainties": ["AST impact marked pending; deep symbol graph not expanded"]
+    }
+  },
   "expected_artifacts": [
     "CoveragePlan",
     "EvidenceShard",

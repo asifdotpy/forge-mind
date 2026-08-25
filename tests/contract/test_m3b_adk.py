@@ -79,21 +79,37 @@ def test_adk_runtime_imports():
 
 
 def test_adk_deterministic_path_matches():
-    """ADK path == deterministic path for FIXTURE-001 (no creds, no pause)."""
+    """ADK path == deterministic path on the NON-pausing (allowed) path.
+
+    Parity is asserted on ``FIXTURE-007-m3-judge-surface-action.json``, whose
+    verified multi-domain findings reach ``safe_autonomous`` / ``allowed`` and
+    therefore do NOT hit the ADK human-approval PAUSE. Both runtimes publish
+    the same terminal and must be byte-identical here.
+
+    FIXTURE-001 is deliberately NOT used: since Change 1 it resolves to a
+    ``human_review`` / ``requires_human`` outcome at confidence 0.7, which the
+    ADK path PAUSES on by design while the deterministic path publishes the
+    ``policy_boundary`` escalation — those two runtimes are correctly NOT
+    identical on a pausing path. The pause/resume contract is asserted
+    separately in ``test_adk_human_approval_pause_resume``.
+    """
     from forgemind.adk_runtime import run_adk_pipeline
     from forgemind.api import EventInput, run_pipeline
 
-    fixture = _load_fixture("FIXTURE-001-happy-path.json")
+    fixture = _load_fixture("FIXTURE-007-m3-judge-surface-action.json")
     body = EventInput(**fixture)
 
     expected = run_pipeline(body)
     actual = run_adk_pipeline(body)
 
-    # Byte-identical artifacts + terminal for the happy (allowed) path.
+    # Byte-identical artifacts + terminal for the non-pausing (allowed) path.
     assert expected == actual
     assert actual["status"] == "ok"
-    # Parity: both paths produce the same terminal kind for FIXTURE-001.
-    assert actual["terminal"]["type"] == expected["terminal"]["type"]
+    # Parity: both runtimes land on the same autonomous terminal.
+    assert actual["terminal"]["type"] == "action"
+    assert (
+        actual["terminal"]["action_validation"]["policy_result"] == "allowed"
+    )
 
 
 def test_human_approval_pauses():
