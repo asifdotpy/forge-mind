@@ -3,7 +3,7 @@
 > **Hackathon:** All Things Agentic Hackathon  
 > **Track:** The Fortified Enterprise Fleet  
 > **Version:** 3.0 — Hierarchical Engineering Agent System  
-> **Status:** 🟡 Architecture Locked — Implementation Scaffolding
+> **Status:** 🟢 Implemented — Five-Tier Runtime + M3 Judge-Visible Surface (M1 local, M2 Cloud Run, M3 provenance/validation/uncertainty/human-control). Real Gemini 3.5 via Vertex AI + Google ADK 2 integrated (ADR-001/008 fulfilled). 140 tests green.
 
 ---
 

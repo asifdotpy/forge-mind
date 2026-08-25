@@ -2,7 +2,7 @@
 
 > **ForgeMind is an autonomous engineering control plane where specialized agents share context, understand relationships across the software lifecycle, reduce operational friction, and know when to act — and when to ask a human.**
 
-**Status:** 🟢 SPEC-001 Complete — Five-Tier Runtime Implemented (Phases 1-6, 128 tests green, M1 local slice done)
+**Status:** 🟢 SPEC-001 Complete — Five-Tier Runtime + M3 Judge Surface Implemented (Phases 1-6, M1/M2/M3 done, 140 tests green, real Gemini 3.5 via Vertex AI + ADK 2)
 
 ## What ForgeMind Is
 
@@ -41,6 +41,7 @@ Canonical runtime chain: `Acquire → Analyze → Reconcile → Produce → Vali
 - [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md) — Verified project status (start here)
 - [`specs/001-hierarchical-runtime-dag/spec.md`](specs/001-hierarchical-runtime-dag/spec.md) — Canonical executable specification
 - [`docs/decisions/`](docs/decisions/) — Architecture Decision Records
+- [`SUBMISSION/`](SUBMISSION/) — Hackathon artifacts: `ARCHITECTURE.md` (diagram), `SPINUP.md` (reproducible setup), `DEMO_SCRIPT.md`, `WRITEUP.md`, `CHECKLIST.md`
 
 ## Quick Start
 
@@ -55,8 +56,8 @@ PYTHONPATH=src python scripts/run_fixture.py fixtures/inputs/FIXTURE-001-happy-p
 
 ## Technology Baseline
 
-- **Reasoning Engine:** Gemini via Vertex AI *(planned)*
-- **Workflow & Orchestration:** Google ADK 2 *(planned)*
+- **Reasoning Engine:** Gemini 3.5 via Vertex AI ✅ (ADR-010, `google-genai`)
+- **Workflow & Orchestration:** Google ADK 2 ✅ (ADR-008, `adk_runtime.py` workflow graph)
 - **Knowledge Brain**: Notion (authoritative) + ChromaDB (dev-time grounding)
 - **Contracts:** JSON Schema draft-07 (9 canonical artifacts)
 - **Toolchain:** Python ≥ 3.11, pytest, uv, ggshield secret scanning
