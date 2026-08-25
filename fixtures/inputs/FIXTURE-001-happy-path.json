@@ -14,7 +14,7 @@
     "affected_entities": ["auth-service", "config"],
     "provenance": {
       "ingested_by": "forgemind-spec-kit",
-      "ingestion_time": "2026-08-21T09:00:01Z",
+      "ingested_at": "2026-08-21T09:00:01Z",
       "source_system": "fixture-harness"
     },
     "payload": {

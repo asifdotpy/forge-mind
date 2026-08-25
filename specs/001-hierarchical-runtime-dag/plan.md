@@ -23,7 +23,7 @@ GATE: Must pass before Phase 0 research; re-check after Phase 1 design.
 
 - Sep-paration of Evidence and Decisions — ✅ (Tier 3 evidence, Tier 5 decision)
 - Strict Provenance Trail – ✅ (machine-readable contracts enforce upstream references)
-- Causality Rigor — ✅ (`causality_assessment` on ValidatedSituation)
+- Causality Rigor — ✅ (result recorded in `causality_status` on ValidatedSituation)
 - Visibility of Absence — ✅ (`missing_domains` representation)
 - Downstream Action Validation / Escalation — ✅ (ActionValidation contract)
 

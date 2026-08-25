@@ -47,11 +47,11 @@ $$\text{DecisionRecord} \longrightarrow \text{ProposedAction} \longrightarrow \t
 ## 4. Invariant Rules of Provenance & Evidence
 1. **Separation of Evidence and Decisions**: Workers produce evidence; only the Reducer produces decisions.
 2. **Strict Provenance Trail**:
-   - `DomainFinding` must reference the exact `source_shard_ids`.
-   - `ValidatedSituation` must reference `source_finding_ids`, `supporting_evidence_ids`, and `conflicting_evidence_ids`.
-   - `DecisionRecord` must reference exactly one `situation_id`.
+   - `DomainFinding` must reference the exact `evidence_shard_ids`.
+   - `ValidatedSituation` must reference `finding_ids`, `supporting_evidence`, and `conflicting_evidence`.
+   - `DecisionRecord` must reference exactly one `validated_situation_id`.
    - `ProposedAction` must reference its `decision_id`.
-   - `ActionValidation` must reference its `proposed_action_id`.
+   - `ActionValidation` must reference its `action_id`.
    - `Escalation` must preserve the unresolved situation, decision, uncertainty, and triggering rule.
-3. **Causality Rigor**: Co-occurring events across domains cannot be claimed as causal without explicit supporting evidence (`causality_assessment`).
+3. **Causality Rigor**: Co-occurring events across domains cannot be claimed as causal without explicit supporting evidence (result recorded in `causality_status`).
 4. **Visibility of Absence**: Missing evidence or uncontactable domains must be explicitly represented in `missing_domains` and factored into escalation policies.

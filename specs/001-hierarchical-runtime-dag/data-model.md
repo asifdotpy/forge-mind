@@ -116,6 +116,6 @@ open → analyzing → reconciling → decision_ready → action_validation → 
 2. Managers aggregate only within their bounded domain.
 3. Only Tier 4 creates `ValidatedSituation`; only Tier 5 creates operational decisions.
 4. Confidence ≠ proof; uncertainty is always preserved.
-5. Correlation never presented as causation without explicit `causality_assessment`.
+5. Correlation never presented as causation without explicit evidence (result recorded in `causality_status`).
 6. Every proposed action passes Action Validation before execution; otherwise Escalate.
 7. Provenance is unbroken (every downstream artifact references its exact upstream IDs).

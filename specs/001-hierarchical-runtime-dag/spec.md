@@ -31,7 +31,7 @@ An engineering signal (PR merged, CI failure, deployment, incident, security ale
 
 ---
 
-### User Story 2 - Evidence to Validated Situation (Priority: P1`
+### User Story 2 - Evidence to Validated Situation (Priority: P1)
 
 Specialist workers emit bounded `EvidenceShard`s; Domain Managers aggregate them into `DomainFinding`s strictly within their own domain; the Tier-4 Cross-Lifecycle Validator reconciles multi-domain findings into a `ValidatedSituation` — without claiming causation unless clearly evidenced.
 
