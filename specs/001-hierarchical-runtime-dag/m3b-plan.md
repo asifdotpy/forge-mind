@@ -42,15 +42,19 @@ caller — dependency changes need review (see T730 step 0).
 `llm` adapter module that degrades to the current deterministic behavior when
 no Vertex credentials are configured. This is the foundation T731/T732 build on.
 
-**Step 0 — dependency decision (REVIEW REQUIRED):** ADR-010 names "Gemini 3.5
-via Vertex AI". Two valid client libs:
-- `google-genai` (generative-ai SDK, simplest for chat/generate), OR
-- `google-cloud-aiplatform` (full Vertex AI, if Agent Engine / reasoning engines
-  are wanted later).
-Default to `google-genai` unless caller says otherwise. Add it to
-`[project].dependencies` (NOT dev). This is the ONLY pyproject change in M3-B.
-Run `.venv/bin/uv pip install google-genai` in the venv to make local imports
-work; record the pin in `uv.lock`.
+**Step 0 — dependency decision (RESOLVED via hackathon rules):** ADR-010 names
+"Gemini 3.5 via Vertex AI". Per the All Things Agentic Hackathon rules
+(allthingsagentichackathon.devpost.com, deadline 2026-08-31), every project
+must use (1) Gemini 3.5+ via Gemini API **or** Vertex AI, (2) at least one
+Google Agent Framework (ADK, **GenAI SDK**, Antigravity, or GenKit), and (3)
+at least one GCP infra service (Cloud Run ✅ already used in M2).
+**Chosen client: `google-genai` (the GenAI SDK)** — it is itself an accepted
+agent framework credential AND the simplest path to Gemini 3.5 Flash; ADK 2
+(ADR-008) remains the chosen workflow framework, and Cloud Run the infra
+credential. This combination satisfies all three mandatory requirements with
+minimal friction. Add `google-genai` to `[project].dependencies` (NOT dev).
+Run `.venv/bin/uv pip install google-genai` to make local imports work; record
+the pin in `uv.lock`.
 
 **Step 1 — `src/forgemind/llm/__init__.py` + `src/forgemind/llm/adapter.py`:**
 implement a single function
@@ -216,7 +220,25 @@ green locally:
 
 ---
 
-## Execution order & gates for Cline
+## Hackathon alignment note (All Things Agentic Hackathon, deadline 2026-08-31)
+
+- ForgeMind is a textbook fit for the **Fortified Enterprise Fleet** track:
+  its required capabilities (Agent Registry, Agent Runtime, Memory Bank, Agent
+  Identity, Agent Gateway, **Model Armor** guardrails, Agent Observability via
+  OpenTelemetry) map directly to ADR-001's GEAP mapping.
+- **Mandatory credentials we already satisfy or will:** Gemini 3.5 via Vertex
+  AI (T731), Google ADK framework (T730 ADK scaffold), GenAI SDK
+  (`google-genai`, T730), Cloud Run infra (M2). All three requirement classes
+  covered.
+- **Known gap vs the track's full ask:** the track wants persistent cross-session
+  "Memory Bank" over weeks — that is exactly what **ADR-009 deferred to
+  post-M3** (runtime memory). Not blocking for M3, but a judge may probe it;
+  record as a post-M3 backlog item, not in M3-B scope.
+- **Submission must include:** live demo on Google Cloud (Cloud Run ✅, scaled
+  to zero between demos per cost guidance), architecture diagram, reproducible
+  README spin-up instructions, ~4-min demo video. Ensure `docs/CURRENT_STATE.md`
+  + README status line reflect M3 COMPLETE and ADK-001/008 fulfilled before
+  submitting.
 
 1. **T730** (deps + `llm` adapter + ADK scaffold + boundary-test extension).
 2. **T731** (Gemini-backed `PRPreFlightASTWorker`, fallback-safe).
