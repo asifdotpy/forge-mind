@@ -16,6 +16,8 @@ GET              /api/v1/health           Liveness probe for Cloud Run
 POST             /api/v1/events           Run an Event through the pipeline
 GET              /api/v1/specs            List canonical JSON Schema contracts
 GET              /api/v1/specs/{name}     Fetch one contract schema
+GET              /api/v1/situations/{id}  Re-derive a situation + M3 proof
+GET              / and /view/{id}         Read-only HTML judge-visible viewer
 ===============  =======================  ==================================
 
 The ``POST /api/v1/events`` request envelope mirrors the canonical fixture
@@ -54,10 +56,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict
 
-from forgemind._paths import CONTRACTS_DIR
+from forgemind._paths import CONTRACTS_DIR, FIXTURES_INPUT_DIR
+from forgemind.m3_proof import build_m3_proof
 from forgemind.acquisition import EventValidationError, acquire_event
 from forgemind.action_gate import (
     ActionGateError,
@@ -186,7 +189,7 @@ def run_pipeline(body: EventInput) -> Dict[str, Any]:
             "escalation": reduction["escalation"],
         }
 
-    return {
+    result: Dict[str, Any] = {
         "status": "ok",
         "situation_id": plan["situation_id"],
         "trace_id": plan["execution_trace_id"],
@@ -199,6 +202,190 @@ def run_pipeline(body: EventInput) -> Dict[str, Any]:
             "validated_situation": validated,
         },
     }
+    # M3-A (T720): additive, presentation-only projection of the result into
+    # the four judge-visible properties.  No tier logic is involved.
+    result["m3_proof"] = build_m3_proof(result)
+    return result
+
+
+def _fixture_body_for(situation_id: str) -> Optional[EventInput]:
+    """Find a repository fixture whose Event carries ``situation_id``.
+
+    The runtime is stateless (no artifact store), so ``GET
+    /api/v1/situations/{id}`` re-derives the situation by replaying the
+    matching canonical fixture input.  Returns ``None`` when nothing matches.
+    """
+    for path in sorted(FIXTURES_INPUT_DIR.glob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):  # pragma: no cover - corrupt fixture
+            continue
+        event = payload.get("event")
+        if isinstance(event, dict) and event.get("situation_id") == situation_id:
+            return EventInput(**payload)
+    return None
+
+
+#: Default fixture situation rendered by the read-only viewer (M3-A / T721).
+DEFAULT_VIEWER_SITUATION_ID = "SIT-1000"
+
+#: Inline stylesheet — no CDN, no JS framework; the viewer works fully offline.
+_VIEWER_CSS = """
+:root { color-scheme: light; }
+body { font-family: ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif;
+       margin: 0; padding: 2rem; background: #f6f7f9; color: #16181d; }
+h1 { font-size: 1.35rem; margin: 0 0 .25rem; }
+h2 { font-size: .95rem; letter-spacing: .06em; text-transform: uppercase;
+     color: #55606e; margin: 0 0 .75rem; }
+.sub { color: #55606e; font-size: .85rem; margin: 0 0 1.5rem; }
+section { background: #fff; border: 1px solid #dfe3e8; border-radius: 10px;
+          padding: 1.1rem 1.25rem; margin-bottom: 1.25rem; }
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: .35rem; }
+.node { border: 1px solid #cfd6de; border-radius: 8px; background: #fbfcfd;
+        padding: .5rem .65rem; min-width: 8.5rem; }
+.node .a { font-weight: 600; font-size: .8rem; }
+.node .i { font-family: ui-monospace, Consolas, monospace; font-size: .72rem;
+           color: #1d4ed8; word-break: break-all; }
+.node .u { font-size: .68rem; color: #6b7480; }
+.arrow { align-self: center; color: #98a2b3; font-size: 1.1rem; }
+.pill { display: inline-block; border-radius: 999px; padding: .2rem .7rem;
+        font-size: .78rem; font-weight: 700; color: #fff; }
+.pill.green { background: #157f3d; }
+.pill.amber { background: #b06f00; }
+.pill.red { background: #b3261e; }
+.banner { border-left: 5px solid #98a2b3; padding: .6rem .9rem;
+          background: #f2f4f7; border-radius: 6px; }
+.banner.green { border-color: #157f3d; }
+.banner.amber { border-color: #b06f00; }
+.banner.red { border-color: #b3261e; }
+dl { display: grid; grid-template-columns: 12rem 1fr; gap: .3rem .8rem;
+     margin: 0; font-size: .85rem; }
+dt { color: #55606e; }
+dd { margin: 0; font-family: ui-monospace, Consolas, monospace; }
+ul { margin: .5rem 0 0; padding-left: 1.2rem; font-size: .85rem; }
+.none { color: #6b7480; font-style: italic; }
+"""
+
+#: verdict / control state -> badge colour class.
+_STATE_COLOR = {
+    "automated": "green",
+    "human_review": "amber",
+    "human_review_required": "amber",
+    "escalated": "red",
+}
+
+
+def _esc(value: Any) -> str:
+    """Minimal HTML escaping for untrusted artifact values."""
+    text = "" if value is None else str(value)
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def _fmt(value: Any) -> str:
+    if value is None or value == [] or value == "":
+        return '<span class="none">none</span>'
+    if isinstance(value, (list, tuple)):
+        return _esc(", ".join(str(v) for v in value))
+    return _esc(value)
+
+
+def _render_situation_html(result: Dict[str, Any]) -> str:
+    """Render the read-only M3 situation viewer (T721).
+
+    Reads ONLY ``build_m3_proof`` output plus the situation/trace ids — no tier
+    logic is re-implemented here.
+    """
+    proof = result.get("m3_proof") or build_m3_proof(result)
+    links = proof["provenance_links"]
+    verdict = proof["validation_verdict"]
+    uncertainty = proof["uncertainty_summary"]
+    control = proof["human_control_state"]
+
+    nodes = [f'<div class="node"><div class="a">Event</div>'
+             f'<div class="i">{_esc(links["event_id"])}</div>'
+             f'<div class="u">origin</div></div>']
+    for entry in links["artifact_chain"]:
+        nodes.append(
+            '<div class="node">'
+            f'<div class="a">{_esc(entry["artifact"])}</div>'
+            f'<div class="i">{_fmt(entry["id"])}</div>'
+            f'<div class="u">&larr; {_esc(", ".join(entry["upstream"]))}</div>'
+            "</div>"
+        )
+    flow = '<span class="arrow">&rarr;</span>'.join(nodes)
+
+    uncertainties = uncertainty["uncertainties"]
+    if uncertainties:
+        items = "".join(f"<li>{_esc(u)}</li>" for u in uncertainties)
+        uncertainty_list = f"<ul>{items}</ul>"
+    else:
+        uncertainty_list = '<p class="none">no uncertainties recorded</p>'
+
+    verdict_color = _STATE_COLOR.get(verdict["state"], "amber")
+    control_color = _STATE_COLOR.get(control["state"], "amber")
+
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ForgeMind situation {_esc(links['situation_id'])}</title>
+<style>{_VIEWER_CSS}</style></head>
+<body>
+<h1>ForgeMind judge-visible surface</h1>
+<p class="sub">situation <strong>{_esc(links['situation_id'])}</strong>
+&middot; execution trace <strong>{_esc(links['execution_trace_id'])}</strong>
+&middot; terminal <strong>{_esc((result.get('terminal') or {}).get('type'))}</strong>
+&middot; read-only, offline</p>
+
+<section>
+  <h2>1. Provenance lineage</h2>
+  <div class="flow">{flow}</div>
+  <dl style="margin-top:1rem">
+    <dt>event_id</dt><dd>{_fmt(links['event_id'])}</dd>
+    <dt>coverage_plan_id</dt><dd>{_fmt(links['coverage_plan_id'])}</dd>
+    <dt>execution_trace_id</dt><dd>{_fmt(links['execution_trace_id'])}</dd>
+    <dt>situation_id</dt><dd>{_fmt(links['situation_id'])}</dd>
+  </dl>
+</section>
+
+<section>
+  <h2>2. Validation verdict</h2>
+  <p><span class="pill {verdict_color}">{_esc(verdict['state'])}</span></p>
+  <dl>
+    <dt>policy_result</dt><dd>{_fmt(verdict['policy_result'])}</dd>
+    <dt>reason</dt><dd>{_fmt(verdict['reason'])}</dd>
+    <dt>validation_id</dt><dd>{_fmt(verdict['validation_id'])}</dd>
+  </dl>
+</section>
+
+<section>
+  <h2>3. Uncertainty callouts</h2>
+  <dl>
+    <dt>causality_status</dt><dd>{_fmt(uncertainty['causality_status'])}</dd>
+    <dt>confidence</dt><dd>{_fmt(uncertainty['confidence'])}</dd>
+    <dt>coverage_percentage</dt><dd>{_fmt(uncertainty['coverage_percentage'])}</dd>
+    <dt>missing_domains</dt><dd>{_fmt(uncertainty['missing_domains'])}</dd>
+  </dl>
+  {uncertainty_list}
+</section>
+
+<section>
+  <h2>4. Human control</h2>
+  <div class="banner {control_color}">
+    <strong>{_esc(control['state'])}</strong> &mdash;
+    autonomy_class {_fmt(control['autonomy_class'])},
+    risk_level {_fmt(control['risk_level'])},
+    required_human_role {_fmt(control['required_human_role'])}
+  </div>
+</section>
+<footer class="sub">M3 proof blocks rendered: provenance, validation, uncertainty,
+human control &mdash; derived from build_m3_proof(), no external assets.</footer>
+</body></html>
+"""
 
 
 def _contract_not_found(name: str) -> JSONResponse:
@@ -253,6 +440,68 @@ def create_api() -> FastAPI:
                 status_code=500,
                 content={"error": "pipeline_error", "detail": str(exc)},
             )
+
+    @app.get("/api/v1/situations/{situation_id}")
+    async def get_situation(situation_id: str, body: Optional[EventInput] = None):
+        """Return the situation view (artifacts + M3 proof) for ``situation_id``.
+
+        The runtime is stateless — there is no artifact store — so the
+        situation is re-derived: either from a posted ``EventInput`` body
+        (identical envelope to ``POST /api/v1/events``) or, when no body is
+        supplied, by replaying the canonical repository fixture whose Event
+        carries this ``situation_id``.
+        """
+        request_body = body or _fixture_body_for(situation_id)
+        if request_body is None:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": "not_found",
+                    "detail": (
+                        f"no replayable event for situation {situation_id!r}; "
+                        "post the Event envelope to re-derive it"
+                    ),
+                },
+            )
+        try:
+            return run_pipeline(request_body)
+        except EventValidationError as exc:
+            return JSONResponse(
+                status_code=422,
+                content={"error": "validation_error", "detail": str(exc)},
+            )
+        except PIPELINE_ERRORS as exc:
+            logger.exception("pipeline failure while deriving situation")
+            return JSONResponse(
+                status_code=500,
+                content={"error": "pipeline_error", "detail": str(exc)},
+            )
+
+    @app.get("/", response_class=HTMLResponse)
+    @app.get("/view/{situation_id}", response_class=HTMLResponse)
+    async def situation_viewer(situation_id: str = DEFAULT_VIEWER_SITUATION_ID):
+        """Read-only, offline HTML viewer for the four M3 proof properties."""
+        request_body = _fixture_body_for(situation_id)
+        if request_body is None:
+            return HTMLResponse(
+                status_code=404,
+                content=(
+                    "<!DOCTYPE html><html><body><h1>Unknown situation</h1>"
+                    f"<p>No replayable event for {_esc(situation_id)}.</p>"
+                    "</body></html>"
+                ),
+            )
+        try:
+            result = run_pipeline(request_body)
+        except (EventValidationError, *PIPELINE_ERRORS) as exc:
+            return HTMLResponse(
+                status_code=500,
+                content=(
+                    "<!DOCTYPE html><html><body><h1>Pipeline error</h1>"
+                    f"<p>{_esc(exc)}</p></body></html>"
+                ),
+            )
+        return HTMLResponse(content=_render_situation_html(result))
 
     @app.get("/api/v1/specs")
     async def list_specs() -> Dict[str, Any]:

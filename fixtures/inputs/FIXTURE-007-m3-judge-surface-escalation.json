@@ -1,0 +1,31 @@
+{
+  "fixture_id": "FIXTURE-007",
+  "name": "M3 judge-visible surface — escalation path",
+  "version": "3.0",
+  "purpose": "M3-A (T711): drives the pipeline to terminal.type == 'escalation' (autonomy_class escalate, required_human_role present) so the judge-visible M3 proof block can be asserted on the human-control path. Mirrors FIXTURE-002 with distinct EVT-7001 / SIT-7001 identifiers.",
+  "event": {
+    "event_id": "EVT-7001",
+    "situation_id": "SIT-7001",
+    "type": "incident",
+    "source": "fixture",
+    "summary": "Elevated authentication errors with multi-domain coverage gaps and high uncertainty; human decision required for the M3 judge-visible surface",
+    "timestamp": "2026-08-25T10:00:00Z",
+    "reference": "https://github.com/example/org/monitoring/incidents/7001",
+    "affected_entities": ["auth-service", "edge-gateway"],
+    "provenance": {
+      "ingested_at": "2026-08-25T10:00:01Z",
+      "source_system": "fixture-harness",
+      "correlated_signals": 3
+    },
+    "payload": {
+      "scenario": "m3-judge-surface-escalation",
+      "deployment": "staging",
+      "error_rate_pct": 12.5,
+      "affected_domains": ["code", "delivery", "production"],
+      "missing_domains": ["documentation", "security"],
+      "high_uncertainty": true,
+      "risk_level": "critical"
+    }
+  },
+  "expected_artifacts": ["Escalation", "Terminal"]
+}

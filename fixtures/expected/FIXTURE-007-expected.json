@@ -1,0 +1,98 @@
+{
+  "fixture_id": "FIXTURE-007",
+  "kind": "expected-assertions",
+  "version": "3.0",
+  "assertions": [
+    {
+      "artifact": "Event",
+      "schema": "contracts/event.schema.json",
+      "checks": [
+        "action input: event_id == EVT-7000, situation_id == SIT-7000",
+        "escalation input: event_id == EVT-7001, situation_id == SIT-7001",
+        "type == incident",
+        "source == fixture",
+        "timestamp is ISO-8601"
+      ]
+    },
+    {
+      "artifact": "CoveragePlan",
+      "schema": "contracts/coverage-plan.schema.json",
+      "checks": [
+        "produced by the acquisition layer with an execution_trace_id",
+        "provenance.event_id references the upstream Event",
+        "situation_id carried over unchanged"
+      ]
+    },
+    {
+      "artifact": "DomainFinding",
+      "schema": "contracts/domain-finding.schema.json",
+      "checks": [
+        "action input supplies one high-confidence finding per lifecycle domain",
+        "verified causal claim corroborated in two domains"
+      ]
+    },
+    {
+      "artifact": "ValidatedSituation",
+      "schema": "contracts/validated-situation.schema.json",
+      "checks": [
+        "produced by Tier 4 Cross-Lifecycle Validator",
+        "causality_status in [unsupported, correlated, supported, verified]",
+        "confidence is a float in 0..1",
+        "coverage.missing_domains explicit (never silent)"
+      ]
+    },
+    {
+      "artifact": "DecisionRecord",
+      "schema": "contracts/decision-record.schema.json",
+      "checks": [
+        "autonomy_class == safe_autonomous for the action input",
+        "autonomy_class == escalate and requires_human == true for the escalation input",
+        "references exactly one validated_situation_id"
+      ]
+    },
+    {
+      "artifact": "ProposedAction",
+      "schema": "contracts/proposed-action.schema.json",
+      "checks": [
+        "action input only: references decision_id",
+        "required_authority present"
+      ]
+    },
+    {
+      "artifact": "ActionValidation",
+      "schema": "contracts/action-validation.schema.json",
+      "checks": [
+        "action input: policy_result == allowed",
+        "validation_id present",
+        "validated_at ISO-8601"
+      ]
+    },
+    {
+      "artifact": "Escalation",
+      "schema": "contracts/escalation.schema.json",
+      "checks": [
+        "escalation input: produced instead of an autonomous action",
+        "required_human_role present",
+        "reason in [uncertainty, risk, coverage_gap, policy_boundary, validation_failure]"
+      ]
+    },
+    {
+      "artifact": "Terminal",
+      "checks": [
+        "action input: terminal.type == action, NO Escalation",
+        "escalation input: terminal.type == escalation, NO autonomous action executed"
+      ]
+    },
+    {
+      "artifact": "M3Proof",
+      "checks": [
+        "m3_proof exposes exactly provenance_links, validation_verdict, uncertainty_summary, human_control_state",
+        "provenance_links is non-empty and carries event_id, coverage_plan_id, execution_trace_id, situation_id",
+        "provenance_links.artifact_chain has 7 entries in lineage order (coverage_plan -> evidence_shards -> domain_findings -> validated_situation -> decision_record -> action_validation -> terminal)",
+        "validation_verdict.state == automated for the action input, escalated for the escalation input",
+        "uncertainty_summary exposes causality_status, confidence and the uncertainties list",
+        "human_control_state.state == automated for the action input; escalated with a non-null required_human_role for the escalation input"
+      ]
+    }
+  ]
+}
