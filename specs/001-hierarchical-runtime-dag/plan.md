@@ -69,9 +69,9 @@ scripts/run_fixture.py   # Phase 0 fixture runner
 | **Phase 6** | Tier 5 Decision Reducer + Action Validation + Escalation | No final action bypasses validation; safe action or escalation published |
 
 **Milestones (BUILD-001)**:
-- **M1**: FIXTURE-001 passes through the five-tier hierarchy locally.
-- **M2**: the same fixture passes through the deployed Google Cloud application.
-- **M3**: the judge-visible surface proves provenance, validation, uncertainty, and human control.
+- **M1**: FIXTURE-001 passes through the five-tier hierarchy locally. — **COMPLETE (2026-08-24)**
+- **M2**: the same fixture passes through the deployed Google Cloud application. — **COMPLETE (2026-08-25)**
+- **M3**: the judge-visible surface proves provenance, validation, uncertainty, and human control. — **GATED** (scope decision pending; see M3 section below).
 
 ### Definition of Done
 `Acquire → Analyze → Reconcile → Produce → Validate` completes with visible Supervisor → Manager → Worker → Validator → Reducer lineage, i.e. the canonical object flow `Event → CoveragePlan → Manager/Worker → EvidenceShard → DomainFinding → ValidatedSituation → DecisionRecord → ProposedAction → ActionValidation → Action OR Escalation` runs end to end.
@@ -85,6 +85,56 @@ scripts/run_fixture.py   # Phase 0 fixture runner
 5. M2/M3 are cloud/evaluation milestones after local slice.
 
 **Parallelism**: Phases 3–4 can parallelize within worker/manager pods; Phase 0 tasks marked `[P]` in `tasks.md` are independent.
+
+## M3 — Judge-Visible Surface (Milestone 3)
+
+M3 proves the four properties a judge evaluates — **provenance, validation,
+uncertainty, human control** — over the already-implemented five-tier DAG.
+All four already exist in the artifacts emitted by `src/forgemind/api.py`:
+`POST /api/v1/events` returns `decision_record`, `action_validation`,
+`escalation`, and the full `artifacts` lineage; `action_gate.publish_terminal_output`
+emits `Escalation` with `required_human_role` for `requires_human`/above-risk
+cases. M3 adds the **presentation layer** that makes them visible, plus
+(optionally) the **AI core** (ADK 2 + Gemini 3.5 via Vertex AI, ADR-001/008 —
+currently *unfulfilled*).
+
+### M3-0 — Scope gate (RESOLVED 2026-08-25)
+- **T710 (CLOSED)**: M3 AI scope decided → **option (b)**: real Gemini 3.5 via
+  Vertex AI inside bounded ADK 2 nodes. Recorded in **ADR-010**; M3-B
+  UNBLOCKED. The five-tier authority boundaries are preserved; Gemini is added
+  only as a bounded Tier 3 narrative node + ADK orchestration + human-approval
+  gate. See ADR-010 for consequences (new runtime dep, ADR-009 test extension,
+  deterministic-fallback requirement, credential/cost guards).
+- **T711**: Author `FIXTURE-007-m3-judge-surface` exercising all four proof
+  points (happy-path `action` + escalation/`human-control`), plus expected
+  assertions.
+
+### M3-A — Judge-visible surface (always required, deterministic)
+- **T720**: Add `GET /api/v1/situations/{situation_id}` returning the lineage
+  plus an explicit M3 proof block: `provenance_links`, `validation_verdict`,
+  `uncertainty_summary`, `human_control_state`. Read-only; no tier changes.
+- **T721**: Add a read-only HTML situation viewer (`/` or `/view/{id}`)
+  rendering the four properties: lineage graph, validation badge, uncertainty
+  callouts, escalation/human-role banner.
+- **T722**: M3 surface contract test asserting the four properties derive
+  correctly for FIXTURE-001 (action) and FIXTURE-002 (escalation).
+
+### M3-B — AI core (conditional on T710 = option b)
+- **T730**: ADK 2 workflow scaffold wrapping the DAG (state graph,
+  pause/resume) per ADR-008.
+- **T731**: Bounded Gemini 3.5 (Vertex AI) node for one worker (e.g.
+  code-intelligence) producing EvidenceShard narrative; contracts unchanged.
+- **T732**: Human-approval gate node (ADK pause/resume) at the action gate.
+- **T733**: ADK integration tests; re-run M2 deploy with ADK-enabled image.
+
+### M3 architectural guardrails
+- M3-A is **presentation only** — no LLM reasoning injected into tiers; reads
+  existing artifacts.
+- Under M3-B, Gemini stays **bounded inside designated nodes** (ADR-008);
+  Validator/Reducer authority boundaries are NOT collapsed.
+- Do M3-0 → M3-A first; that alone delivers a judge-visible, fully
+  deterministic M3 and is shippable. M3-B is the "real agent" upgrade and
+  starts only after T710 picks scope.
 
 ## Verification Strategy
 - `pytest tests/contract/`, `pytest tests/integration/` — automated.

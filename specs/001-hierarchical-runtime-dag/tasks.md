@@ -54,7 +54,7 @@ description: "Task list for 001-hierarchical-runtime-dag Phase 0 baseline"
 - [x] T022 Update `docs/CURRENT_STATE.md` to Phase 0 complete (incl. status, next task)
 - [x] T023 [P] Full `pytest tests/` green (brain 5 + secret 6 + new contract/integration)
 - [x] T024 **STOP** — cross-document consistency review — ✅ **PASS 2026-08-23** (dual-verified: Cline planner + SpecForge verifier · report: `specs/001-hierarchical-runtime-dag/reviews/T024-consistency-review.md` · W1–W5 non-blocking)
-- [ ] T025 [P] Normalization pass (W1–W4): constitution §4.2 field names → contract names (`evidence_shard_ids`, `finding_ids`, `supporting_evidence`, `conflicting_evidence`, `action_id`, `validated_situation_id`); reword `causality_assessment` → "result recorded in `causality_status`" (data-model L119, plan L26, constitution §4.3); fix spec.md L34 heading backtick; unify fixture provenance key → `ingested_at`; reconcile T019 filename (`test_escalation_run.py` → `test_fixture_run.py`). **DEADLINE: before T200 (Phase 2 code-gen).** [W5 `missing_domains` vocabulary → design input for T500]
+- [x] T025 [P] Normalization pass (W1–W4): constitution §4.2 field names → contract names (`evidence_shard_ids`, `finding_ids`, `supporting_evidence`, `conflicting_evidence`, `action_id`, `validated_situation_id`); reword `causality_assessment` → "result recorded in `causality_status`" (data-model L119, plan L26, constitution §4.3); fix spec.md L34 heading backtick; unify fixture provenance key → `ingested_at`; reconcile T019 filename (`test_escalation_run.py` → `test_fixture_run.py`). **DEADLINE: before T200 (Phase 2 code-gen).** [W5 `missing_domains` vocabulary → design input for T500]
 
 **Checkpoint**: Phase 0 complete — review gate **CLOSED 2026-08-23** (T024 PASS). Phase 1 unblocked.
 
@@ -67,7 +67,35 @@ description: "Task list for 001-hierarchical-runtime-dag Phase 0 baseline"
 - [x] T500 Phase 5: Tier 4 Cross-Lifecycle Validator (ValidatedSituation, causality)
 - [x] T600 Phase 6: Tier 5 Reducer + ActionValidation + Escalation (no bypass)
 
-**Checkpoint**: Phases 1–6 COMPLETE (2026-08-24). SPEC-001 Definition-of-Done lineage runs end-to-end locally: `Event → CoveragePlan → EvidenceShard → DomainFinding → ValidatedSituation → DecisionRecord → ProposedAction → ActionValidation → Action OR Escalation`. M1 local slice DONE; M2/M3 remain.
+**Checkpoint**: Phases 1–6 COMPLETE (2026-08-24). SPEC-001 Definition-of-Done lineage runs end-to-end locally: `Event → CoveragePlan → EvidenceShard → DomainFinding → ValidatedSituation → DecisionRecord → ProposedAction → ActionValidation → Action OR Escalation`. M1 local slice DONE; M2 COMPLETE (2026-08-25); M3 GATED.
+
+## M3 — Judge-Visible Surface (Milestone 3)
+
+**Status**: GATED — scope decision pending (T710). M1 COMPLETE (2026-08-24);
+M2 COMPLETE (2026-08-25). The four proof points (provenance, validation,
+uncertainty, human control) already exist in emitted artifacts; M3 adds the
+presentation layer (M3-A, always) and optionally the AI core (M3-B, see T710).
+
+### M3-0 — Scope gate (STOP before code)
+- [x] T710 **STOP** — M3 AI scope DECIDED (2026-08-25): option (b) real Gemini 3.5 via Vertex AI inside bounded ADK 2 nodes. Recorded in **ADR-010**; M3-B UNBLOCKED.
+- [ ] T711 Author `FIXTURE-007-m3-judge-surface` (happy-path action + escalation/human-control) + expected assertions.
+
+### M3-A — Judge-visible surface (always required, deterministic)
+> Execution spec: `specs/001-hierarchical-runtime-dag/m3a-plan.md` (code-ready, field-verified).
+- [ ] T720 Add `GET /api/v1/situations/{situation_id}` returning lineage + M3 proof block (`provenance_links`, `validation_verdict`, `uncertainty_summary`, `human_control_state`). Read-only; no tier changes.
+- [ ] T721 Add read-only HTML situation viewer (`/` or `/view/{id}`): lineage graph, validation badge, uncertainty callouts, escalation/human-role banner.
+- [ ] T722 M3 surface contract test: four properties derive correctly for FIXTURE-001 (action) and FIXTURE-002 (escalation).
+
+### M3-B — AI core (conditional on T710 = option b)
+- [ ] T730 ADK 2 workflow scaffold wrapping the DAG (state graph, pause/resume) per ADR-008.
+- [ ] T731 Bounded Gemini 3.5 (Vertex AI) node for one worker (e.g. code-intelligence) producing EvidenceShard narrative; contracts unchanged.
+- [ ] T732 Human-approval gate node (ADK pause/resume) at the action gate.
+- [ ] T733 ADK integration tests; re-run M2 deploy with ADK-enabled image.
+
+### M3 guardrails
+- M3-A is presentation only (reads existing artifacts; no LLM in tiers).
+- Under M3-B, Gemini stays bounded inside designated nodes; Validator/Reducer authority boundaries NOT collapsed.
+- Sequence M3-0 → M3-A first (shippable deterministic M3); M3-B only after T710.
 
 ## Dependencies & Execution Order
 
