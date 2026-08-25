@@ -1,8 +1,8 @@
 # Current State — ForgeMind v3.0
 
-**Date**: 2026-08-24  
-**Phase**: Phase 6 COMPLETE — Tier 5 Decision Reducer + ActionValidation + Escalation  
-**Status**: Phase 6 CLOSED (T600 PASS 2026-08-24) — SPEC-001 five-tier runtime COMPLETE (M1 local slice); ADR-009 ChromaDB boundary accepted and machine-enforced  
+**Date**: 2026-08-25  
+**Phase**: Phase 6 COMPLETE — M2 Cloud Run deployment (SPEC-001 Milestone 2)  
+**Status**: M2 COMPLETE (T700 PASS 2026-08-25) — FIXTURE-001 passes through the deployed Google Cloud application (us-central1) on Cloud Run; M1 local slice + M2 cloud slice COMPLETE; M3 (judge-visible surface) REMAINS  
 **Branch**: `main` → `origin/main` (github.com/asifdotpy/forge-mind, public)
 
 ---
@@ -125,10 +125,10 @@ forge-mind/
 |--------|-------|
 | Working tree | Clean (all phases + ADR-009 boundary work committed) |
 | Branch | `main` tracking `origin/main` |
-| Commits | 39 conventional commits; local HEAD `e4f18f1` — **7 ahead of `origin/main`, not yet pushed** |
+| Commits | 40 conventional commits; HEAD `7693537` — **0 ahead, synced with `origin/main`** |
 | Runtime phase commits | T100 acquisition · T200 supervisor · T300 domain managers · T400 workers · tiers wiring · T500 validator · validator wiring · T600 reducer + action gate · reducer wiring |
 | M2 prep commits | `5e807d6` FastAPI + Dockerfile + Cloud Run pipeline · `8e26721` docs/spec alignment · `ea59d55` ADR-009 · `1a66f26` chromadb reclassification · `117272d` Knowledge Brain suite removal · `5afcfb7` GCP deployment env docs · `e4f18f1` ADR amendment |
-| Pending push | 7 commits (`8e26721`, `ea59d55`, `1a66f26`, `117272d`, `176dc77`, `5afcfb7`, `e4f18f1`) — awaiting user authorization |
+| Pending push | None — all 40 commits pushed to `origin/main` |
 
 ### 2.3 GitHub Remote (NEW — 2026-08-23)
 
@@ -221,7 +221,7 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 | Milestone | Description | Status |
 |-----------|-------------|--------|
 | **M1** | FIXTURE-001 passes through five-tier hierarchy locally | **COMPLETE** (2026-08-24) |
-| **M2** | FIXTURE-001 passes through deployed Google Cloud application | GATED |
+| **M2** | FIXTURE-001 passes through deployed Google Cloud application | **COMPLETE** (2026-08-25) |
 | **M3** | Judge-visible surface proves provenance, validation, uncertainty, human control | GATED |
 
 ---
@@ -432,7 +432,7 @@ Fixture validation complete. 0 error(s).
 | 6 | ~~ADR-009 ChromaDB boundary~~ ✅ DONE 2026-08-24 — ADR written, chromadb reclassified as dev-only, boundary machine-enforced (4 tests), Knowledge Brain pseudo-suite removed; 127/127 green; independently verified by SpecForge (Step 10 PASS). 4 commits **awaiting push authorization** | Cline + SpecForge |
 | 7 | **Push the 4 pending commits** to `origin/main` | User authorization required |
 | 8 | **T025 impact audit** — identify affected contract fields, every consumer (schema/fixture/test), and whether normalization is still required; then the smallest corrective task, closed with evidence. **Must precede the M2 deployment gate.** | SpecForge |
-| 9 | **M2 deployment gate** — review readiness; then Google Cloud deployment (Cloud Run, Artifact Registry, Pub/Sub) | User (with SpecForge planning) |
+| 9 | ~~**M2 deployment gate**~~ ✅ COMPLETE 2026-08-25 — T700 deployed forgemind-v3-prod to Cloud Run (us-central1); FIXTURE-001 passes through deployed /api/v1/events; service scaled to zero to preserve credit pool | Cline |
 | 10 | **M3** — Judge-visible surface (provenance, validation, uncertainty, human control) | User (with SpecForge planning) |
 
 **Note on M2 readiness**: the ADR-009 gate proved the *development/runtime boundary* holds and that the container runs FIXTURE-006 end-to-end locally. It did **not** establish M2 readiness — M2 requires FIXTURE-001 passing through a *deployed* Google Cloud application. These are distinct claims and are not to be collapsed.
@@ -465,3 +465,5 @@ Per `spec.md` Stop Condition:
 *Updated: Phases 5–6 implemented & verified (T500 validator `4baaafc`; T600 reducer + action gate), 128/128 green, runner 0 errors across 6 fixtures — SPEC-001 M1 local slice COMPLETE (Cline) — 2026-08-24*  
 *Updated: ADR-009 ChromaDB boundary accepted — chromadb reclassified as a dev-only dependency, boundary machine-enforced via `tests/contract/test_runtime_boundary.py`, Knowledge Brain pseudo-test suite removed; baseline 127/127; CVE-2026-45829 absent from the production image (verified in-container); FAIL-004 posture corrected. Implemented by Cline, independently verified by SpecForge (Step 10 PASS). 4 commits pending push — 2026-08-24*  
 *Updated: ADR-007 amended — trace clause rewritten to match the implemented lineage model (provenance everywhere, `TRC-*` root trace where contracted, OTel span tracing deferred to T1000); FAIL-005 recorded for the overstated audit claim; docs-only change, suite re-verified green — 2026-08-24*
+
+*Updated: T700 (M2) — deployed forgemind-v3-prod to Cloud Run (us-central1), enabled BuildKit in deploy/cloudbuild.yaml (DOCKER_BUILDKIT=1) and granted allUsers run.invoker; health endpoint ok; FIXTURE-001-happy-path.json passes through deployed /api/v1/events (deployed response equivalent to local baseline, M2); service scaled to zero; deployed image forgemind:769353770798dece5fa0277f6a6f87ac2d50b508 retained in Artifact Registry — 2026-08-25*
