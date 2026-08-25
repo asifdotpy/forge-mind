@@ -87,7 +87,8 @@ presentation layer (M3-A, always) and optionally the AI core (M3-B, see T710).
 - [ ] T722 M3 surface contract test: four properties derive correctly for FIXTURE-001 (action) and FIXTURE-002 (escalation).
 
 ### M3-B — AI core (conditional on T710 = option b)
-- [ ] T730 ADK 2 workflow scaffold wrapping the DAG (state graph, pause/resume) per ADR-008.
+> Execution spec: `specs/001-hierarchical-runtime-dag/m3b-plan.md` (code-ready, ADR-010-aligned).
+- [ ] T730 ADK 2 workflow scaffold wrapping the DAG (state graph, pause/resume) per ADR-008 + `llm/` adapter with deterministic fallback.
 - [ ] T731 Bounded Gemini 3.5 (Vertex AI) node for one worker (e.g. code-intelligence) producing EvidenceShard narrative; contracts unchanged.
 - [ ] T732 Human-approval gate node (ADK pause/resume) at the action gate.
 - [ ] T733 ADK integration tests; re-run M2 deploy with ADK-enabled image.
