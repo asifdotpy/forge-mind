@@ -1,8 +1,8 @@
 # Current State — ForgeMind v3.0
 
-**Date**: 2026-08-25  
-**Phase**: Phase 6 COMPLETE — M2 Cloud Run deployment (SPEC-001 Milestone 2)  
-**Status**: M2 COMPLETE (T700 PASS 2026-08-25) — FIXTURE-001 passes through the deployed Google Cloud application (us-central1) on Cloud Run; M1 local slice + M2 cloud slice COMPLETE; M3 (judge-visible surface) REMAINS  
+**Date**: 2026-08-26  
+**Phase**: Phase 6 COMPLETE — M3 Judge-visible surface (SPEC-001 Milestone 3)  
+**Status**: M3 COMPLETE (2026-08-25) — judge-visible surface shipped (M3-A viewer + M3-B Gemini/ADK); M1 local + M2 cloud + M3 judge surface COMPLETE; SPEC-001 Definition-of-Done achieved  
 **Branch**: `main` → `origin/main` (github.com/asifdotpy/forge-mind, public)
 
 ---
@@ -14,7 +14,7 @@ ForgeMind v3.0 Phase 6 (Tier 5 Decision Reducer + Action Validation + Escalation
 - All 9 canonical JSON Schema contracts authored and validated
 - 6 fixtures with expected assertions authored and passing
 - `src/forgemind/` package importable
-- `pytest tests/` green (127/127 — 5 contract baseline + 19 Phase 1 + 18 Phase 2 + 15 Phase 3 + 18 Phase 4 + 15 Phase 5 + 23 Phase 6 + 4 ADR-009 boundary + 4 integration + 6 secret-handling)
+- `pytest tests/` green (141/141 — 5 contract baseline + 19 Phase 1 + 18 Phase 2 + 15 Phase 3 + 18 Phase 4 + 15 Phase 5 + 23 Phase 6 + 7 ADR-009 boundary + 6 M3-A surface + 5 M3-B ADK + 4 integration + 6 secret-handling)
 - Phase 1 acquisition module (`src/forgemind/acquisition.py`) implements deterministic `Event → CoveragePlan` lineage prefix
 - Phase 2 supervisor module (`src/forgemind/supervisor.py`) implements `Event → CoveragePlan → SupervisorDispatch` trace with global constraint enforcement
 - Phase 3 domain managers (`src/forgemind/domain_managers.py`) implement bounded-domain aggregation: `Event → CoveragePlan → SupervisorDispatch → DomainFinding`
@@ -26,7 +26,7 @@ ForgeMind v3.0 Phase 6 (Tier 5 Decision Reducer + Action Validation + Escalation
 - Notion MCP connected (28 tools)
 - Knowledge Brain boundary enforced (30 pages, 368 chunks) — **development-time tooling only** per ADR-009
 
-**SPEC-001 Definition-of-Done lineage runs end-to-end locally (M1). M2/M3 (cloud deployment, judge surface) remain.**
+**SPEC-001 Definition-of-Done lineage runs end-to-end locally (M1), through deployed Cloud Run (M2), and the judge-visible surface + Gemini/ADK core (M3) are complete.**
 
 **ADR-009 (2026-08-24)** settles the ChromaDB boundary: ChromaDB provides CONTEXT, not AUTHORITY. It is a development-time derived index over boundary-scoped Notion knowledge, consumed only by SpecForge for planning and verification. It is no longer a runtime dependency, is absent from the production image, and the boundary is enforced by `tests/contract/test_runtime_boundary.py` rather than by documentation alone. Runtime ChromaDB integration is DEFERRED to post-M3.
 
@@ -222,7 +222,7 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 |-----------|-------------|--------|
 | **M1** | FIXTURE-001 passes through five-tier hierarchy locally | **COMPLETE** (2026-08-24) |
 | **M2** | FIXTURE-001 passes through deployed Google Cloud application | **COMPLETE** (2026-08-25) |
-| **M3** | Judge-visible surface proves provenance, validation, uncertainty, human control | GATED |
+| **M3** | Judge-visible surface proves provenance, validation, uncertainty, human control | **COMPLETE** (2026-08-25) |
 
 ---
 
@@ -262,9 +262,9 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 
 ```
 $ .venv/bin/python -m pytest tests/ -q
-........................................................................ [ 56%]
-.......................................................                  [100%]
-127 passed in 7.26s
+........................................................................ [ 51%]
+.....................................................................    [100%]
+141 passed in 18.03s
 ```
 
 | Suite | Tests |
@@ -276,12 +276,14 @@ $ .venv/bin/python -m pytest tests/ -q
 | `tests/contract/test_workers.py` | 18 (Phase 4) |
 | `tests/contract/test_validator.py` | 15 (Phase 5) |
 | `tests/contract/test_reducer.py` | 23 (Phase 6) |
-| `tests/contract/test_runtime_boundary.py` | 4 (ADR-009 boundary) |
+| `tests/contract/test_runtime_boundary.py` | 7 (ADR-009 boundary) |
+| `tests/contract/test_m3_surface.py` | 6 (M3-A) |
+| `tests/contract/test_m3b_adk.py` | 5 (M3-B ADK) |
 | `tests/integration/test_fixture_run.py` | 4 |
 | `tests/test_secret_handling.py` | 6 (FAIL-003 guard) |
-| **Total** | **127** |
+| **Total** | **141** |
 
-**Baseline history**: 90 (Phases 1–4) → 128 (Phases 5–6) → 132 (+4 ADR-009 boundary) → **127** (−5 after removing `tests/test_knowledge_brain.py`, which asserted the contents of a gitignored local ChromaDB index rather than any code behaviour; see ADR-009 §2).
+**Baseline history**: 90 (Phases 1–4) → 128 (Phases 5–6) → 132 (+4 ADR-009 boundary) → **127** (−5 after removing `tests/test_knowledge_brain.py`) → **141** (+6 M3-A surface, +5 M3-B ADK, +3 boundary-growth — `test_runtime_boundary` gained `llm`/`adk_runtime`/`worker_contexts` import guards).
 
 **Every remaining test is independent of the local Knowledge Brain**: the suite runs on a bare clone with no `chromadb` installed and no `NOTION_TOKEN` set.
 
@@ -289,7 +291,7 @@ $ .venv/bin/python -m pytest tests/ -q
 
 | Check | Command | Result |
 |-------|---------|--------|
-| Deterministic suite, chromadb import-blocked | `PYTHONPATH=<blocker>:src pytest tests/` | 127 passed, 0 failed |
+| Deterministic suite, chromadb import-blocked | `PYTHONPATH=<blocker>:src pytest tests/` | 141 passed, 0 failed |
 | Runtime import, chromadb blocked | `python -c "import forgemind"` | OK 0.1.0 |
 | chromadb absent from production image | `docker run … python -c "import chromadb"` | `ModuleNotFoundError` |
 | runtime importable in production image | `docker run … python -c "import forgemind"` | OK 0.1.0 |
@@ -433,7 +435,7 @@ Fixture validation complete. 0 error(s).
 | 7 | **Push the 4 pending commits** to `origin/main` | User authorization required |
 | 8 | ~~**T025 impact audit**~~ ✅ DONE 2026-08-25 (`d951587`) — audited against `reviews/T024-consistency-review.md` W1–W5: `d951587` normalized W1/W2/W4 prose to contracts (constitution §4.2/§4.3, data-model, plan, spec.md L34, FIXTURE-001 `ingested_at`); W3 already satisfied (`tasks.md` T018/T019 → `tests/integration/test_fixture_run.py`); W5 (missing_domains vocabulary) was a T500 design input, not T025. Docs-only, verified 127/127 + 0 runner errors. **Gate already passed** (row 9). Residual: `tasks.md` L57 `[ ] T025` tracker unflipped | SpecForge |
 | 9 | ~~**M2 deployment gate**~~ ✅ COMPLETE 2026-08-25 — T700 deployed forgemind-v3-prod to Cloud Run (us-central1); FIXTURE-001 passes through deployed /api/v1/events; service scaled to zero to preserve credit pool | Cline |
-| 10 | **M3** — Judge-visible surface (provenance, validation, uncertainty, human control) | User (with SpecForge planning) |
+| 10 | ~~**M3** — Judge-visible surface (provenance, validation, uncertainty, human control)~~ ✅ **COMPLETE** (2026-08-25) — M3-A viewer + M3-B Gemini/ADK shipped | Cline |
 
 **Note on M2 readiness**: the ADR-009 gate proved the *development/runtime boundary* holds and that the container runs FIXTURE-006 end-to-end locally. It did **not** establish M2 readiness — M2 requires FIXTURE-001 passing through a *deployed* Google Cloud application. These are distinct claims and are not to be collapsed.
 
@@ -468,3 +470,5 @@ Per `spec.md` Stop Condition:
 
 *Updated: T700 (M2) — deployed forgemind-v3-prod to Cloud Run (us-central1), enabled BuildKit in deploy/cloudbuild.yaml (DOCKER_BUILDKIT=1) and granted allUsers run.invoker; health endpoint ok; FIXTURE-001-happy-path.json passes through deployed /api/v1/events (deployed response equivalent to local baseline, M2); service scaled to zero; deployed image forgemind:769353770798dece5fa0277f6a6f87ac2d50b508 retained in Artifact Registry — 2026-08-25*  
 *Updated: T025 reconciled — `d951587` (2026-08-25) already performed the W1–W4 normalization pass at the documentation level (constitution §4.2/§4.3, data-model, plan, spec.md L34 backtick, FIXTURE-001 `ingested_at`); Verified 127 passed / `run_fixture.py` 0 errors (docs-only). Known Issues & Next Actions rows updated to CLOSED/DONE. Residual: `tasks.md` T025 tracker row still `[ ]` unflipped (SpecForge) — 2026-08-25*
+
+*Refactor: modularised the single-file `src/forgemind/api.py` (1069 LOC) into the `forgemind.api` package — `errors.py` (constants), `models.py` (envelopes), `pipeline.py` (five-tier orchestration, no HTTP), `routes.py` (FastAPI factory + handlers), and a `dashboard/` subpackage (`css|constants|helpers|sections|render`) for the M3-A/T721 read-only judge-visible viewer. Pure code-move: the facade `api/__init__.py` re-exports the identical public surface (`create_api`, `run_pipeline`, `EventInput`, `_render_situation_html`, `app`, …), so `uvicorn forgemind.api:create_api --factory`, the Dockerfile, and existing tests are unchanged. Verified: 141/141 pytest green; rendered viewer byte-identical to the pre-move baseline (16465/15554/15554 chars for the action + escalation fixtures); app boots and `/api/v1/health`, `/view/SIT-7000`, and `POST /api/v1/events` (FIXTURE-007 → terminal action) all pass — 2026-08-27*
