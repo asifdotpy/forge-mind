@@ -113,33 +113,26 @@ def register_adk_routes(app: FastAPI) -> None:
 
             # Ensure the session exists.
             try:
-                session_service.get_session(
+                await session_service.get_session(
                     app_name=runner.app_name,
                     user_id="anonymous",
                     session_id=session_id,
                 )
             except Exception:
                 # Session doesn't exist yet — create it.
-                import asyncio
-                asyncio.run(session_service.create_session(
+                await session_service.create_session(
                     app_name=runner.app_name,
                     user_id="anonymous",
                     session_id=session_id,
-                ))
+                )
 
-            import asyncio
-
-            async def run_agent():
-                events = []
-                async for event in runner.run_async(
-                    user_id="anonymous",
-                    session_id=session_id,
-                    new_message=user_content,
-                ):
-                    events.append(event.model_dump() if hasattr(event, "model_dump") else str(event))
-                return events
-
-            events = asyncio.run(run_agent())
+            events = []
+            async for event in runner.run_async(
+                user_id="anonymous",
+                session_id=session_id,
+                new_message=user_content,
+            ):
+                events.append(event.model_dump() if hasattr(event, "model_dump") else str(event))
 
             return {
                 "status": "ok",
