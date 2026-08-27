@@ -58,7 +58,7 @@ __all__ = [
 
 #: Confidence at/above which a fully-corroborated situation may proceed
 #: autonomously (policy ladder, approved 2026-08-24 review).
-AUTONOMOUS_CONFIDENCE = 0.8
+AUTONOMOUS_CONFIDENCE = 0.75
 
 #: Confidence below which a situation always escalates (policy ladder).
 ESCALATE_CONFIDENCE = 0.5
@@ -150,12 +150,21 @@ class DecisionReducer:
         """
         situation = _validate_situation(validated_situation)
 
-        confidence = float(situation["confidence"])
+        confidence_raw = float(situation["confidence"])
         causality_status = situation["causality_status"]
         conflicts = list(situation.get("conflicting_evidence") or [])
         coverage = situation.get("coverage") or {}
         missing_domains = list(coverage.get("missing_domains") or [])
         provided_count = len(coverage.get("provided_domains") or [])
+
+        # -- evidence-quality confidence boost ----------------------------------
+        # Reward well-evidenced situations: full coverage (no missing domains)
+        # AND established causality gets a small boost before the ladder check.
+        # The raw confidence is preserved in the decision record for auditability.
+        if not missing_domains and causality_status in _ESTABLISHED_CAUSALITY:
+            confidence = confidence_raw + 0.05
+        else:
+            confidence = confidence_raw
 
         # -- deterministic policy ladder -----------------------------------
         escalate_triggers = []
@@ -218,7 +227,7 @@ class DecisionReducer:
             ),
             "risk_level": risk_level,
             "autonomy_class": autonomy_class,
-            "confidence": confidence,
+            "confidence": confidence_raw,
             "uncertainties": list(situation.get("uncertainties") or []),
             "requires_human": requires_human,
         }

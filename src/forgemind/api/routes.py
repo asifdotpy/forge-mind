@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from forgemind._env import load_dotenv
 from forgemind._paths import CONTRACTS_DIR
 from forgemind.acquisition import EventValidationError
 from forgemind.adk_runtime import (
@@ -42,7 +43,13 @@ def _contract_not_found(name: str) -> JSONResponse:
 
 
 def create_api() -> FastAPI:
-    """Build the ForgeMind FastAPI application (uvicorn ``--factory`` target)."""
+    """Build the ForgeMind FastAPI application (uvicorn ``--factory`` target).
+
+    Loads the gitignored project-root ``.env`` before routes are registered
+    (local-dev convenience so ``GITHUB_TOKEN`` etc. need no shell export);
+    a no-op under pytest and in production images (no ``.env`` present).
+    """
+    load_dotenv()
     app = FastAPI(
         title="ForgeMind Control Plane",
         version=SERVICE_VERSION,

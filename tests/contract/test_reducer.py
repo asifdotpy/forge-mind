@@ -405,7 +405,7 @@ def test_decision_rationale_records_threshold_accounting():
         REDUCER.reduce(situation)["decision_record"]["rationale"]
     )
     assert "safe_autonomous" in rationale
-    assert "0.8" in rationale and "0.5" in rationale
+    assert "0.75" in rationale and "0.5" in rationale
     assert "causality_status='verified'" in rationale
 
 

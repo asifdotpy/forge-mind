@@ -355,11 +355,14 @@ class PRPreFlightASTWorker(Worker):
         except Exception:
             model_obs = None
         if model_obs is not None:
+            self._last_observations = model_obs
             return model_obs
         changed = context.get("inputs", {}).get("changed_files") or []
-        return [f"changed file in changeset: {f}" for f in changed] or [
+        result = [f"changed file in changeset: {f}" for f in changed] or [
             "no changed files recorded in context"
         ]
+        self._last_observations = result
+        return result
 
     def _claims(self, context: dict) -> list:
         # Same bounded Gemini-backing discipline as ``_observations``.
@@ -377,6 +380,65 @@ class PRPreFlightASTWorker(Worker):
                 f"changeset touches {len(changed)} file(s); AST impact marked pending"
             ]
         return ["changeset contains no; file changes to claim"]
+
+    def _confidence(self, context: dict) -> float:
+        """Evidence-based confidence derived from actual code analysis signals.
+
+        Base 0.90, then adjusts per changed-file surface and Gemini-produced
+        observations.  Differs from the base Worker heuristic (file-count only)
+        by incorporating test coverage, low-risk file classification, and
+        risk-keyword signals from the Gemini observations / deterministic
+        fallback.
+        """
+        value = context.get("confidence")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return max(0.3, min(1.0, float(value)))
+
+        base = 0.90
+        inputs = context.get("inputs", {}) or {}
+        changed_files = inputs.get("changed_files") or []
+
+        # -0.02 per changed file, capped at -0.15 total.
+        file_penalty = min(0.15, len(changed_files) * 0.02)
+        base -= file_penalty
+
+        # -0.12 if any security-sensitive path is touched.
+        _security_terms = ("auth", "security", "crypto", "token", "secret", "password")
+        if any(
+            any(term in f.lower() for term in _security_terms) for f in changed_files
+        ):
+            base -= 0.12
+
+        # -0.08 if no test files in the changeset AND more than 2 files changed.
+        _test_terms = ("test", "spec", "_test", "test_", "tests", "fixture")
+        has_test_file = any(
+            any(term in f.lower() for term in _test_terms) for f in changed_files
+        )
+        if not has_test_file and len(changed_files) > 2:
+            base -= 0.08
+
+        # +0.05 if ALL changed files are low-risk (tests, docs, config, md).
+        _low_risk_terms = ("test", "spec", "_test", "test_", "tests", "fixture", "doc", ".md", "config", "README", "LICENSE")
+        all_low_risk = changed_files and all(
+            any(term in f.lower() for term in _low_risk_terms) for f in changed_files
+        )
+        if all_low_risk:
+            base += 0.05
+
+        # Scan the already-resolved observations (cached by _observations()) for
+        # risk keywords.  Using the cached list avoids a second Gemini call.
+        observations = getattr(self, "_last_observations", None)
+        if observations is None:
+            observations = self._observations(context)
+        _risk_keywords = (
+            "vulnerability", "injection", "auth bypass", "xss", "csrf",
+            "rce", "privilege escalation", "hardcoded", "secret", "token leakage",
+        )
+        joined_obs = " ".join(str(o) for o in observations).lower()
+        if any(keyword in joined_obs for keyword in _risk_keywords):
+            base -= 0.10
+
+        return max(0.3, min(1.0, base))
 
 
 class DocsDriftAndSpecWorker(Worker):
