@@ -125,10 +125,9 @@ forge-mind/
 |--------|-------|
 | Working tree | Clean (all phases + ADR-009 boundary work committed) |
 | Branch | `main` tracking `origin/main` |
-| Commits | 40 conventional commits; HEAD `7693537` — **0 ahead, synced with `origin/main`** |
+| Commits | 52 conventional commits; HEAD `6977327` — **0 ahead, synced with `origin/main`** |
 | Runtime phase commits | T100 acquisition · T200 supervisor · T300 domain managers · T400 workers · tiers wiring · T500 validator · validator wiring · T600 reducer + action gate · reducer wiring |
 | M2 prep commits | `5e807d6` FastAPI + Dockerfile + Cloud Run pipeline · `8e26721` docs/spec alignment · `ea59d55` ADR-009 · `1a66f26` chromadb reclassification · `117272d` Knowledge Brain suite removal · `5afcfb7` GCP deployment env docs · `e4f18f1` ADR amendment |
-| Pending push | None — all 40 commits pushed to `origin/main` |
 
 ### 2.3 GitHub Remote (NEW — 2026-08-23)
 
@@ -413,7 +412,7 @@ Fixture validation complete. 0 error(s).
 | Issue | Impact | Resolution |
 |-------|--------|------------|
 | ~~No remote configured~~ ✅ RESOLVED 2026-08-23 | — | `origin` = github.com/asifdotpy/forge-mind (public, hardened) |
-| ~~Runtime tiers NOT implemented~~ ✅ RESOLVED through Tier 5 2026-08-24 | All five tiers shipped (Phases 1–6) | M1 complete; M2/M3 (cloud deployment, judge surface) remain |
+| ~~Runtime tiers NOT implemented~~ ✅ RESOLVED through Tier 5 2026-08-24 | All five tiers shipped (Phases 1–6) | M1/M2/M3 complete — SPEC-001 Definition-of-Done achieved |
 | Dependabot: `chromadb` CRITICAL (CVE-2026-45829) | **No longer present in the production image** (ADR-009, verified 2026-08-24: `import chromadb` → `ModuleNotFoundError` inside `forgemind:adr009`) | Reclassified as a dev-only dependency. The earlier FAIL-004 mitigation rested on "embedded client only, no network surface" — a premise that weakened once `5e807d6` shipped an `--allow-unauthenticated` Cloud Run service. The package is now absent from that image rather than merely unreachable within it. Still pinned at 1.5.9 for local dev use only (no fixed release published); keep Chroma in embedded mode, never run a networked Chroma server. |
 | Dependabot: `cryptography` HIGH×2/MODERATE | None (mitigated; see FAILURE_LOG FAIL-004) | Accepted with mitigation — ForgeMind code never imports `cryptography`; a `>=49` bump is blocked by `ggshield==1.53.0` (`cryptography<49`). Re-evaluate when ggshield lifts the cap. |
 | ForgeMind project-memory | Dev-time grounding via ChromaDB (Notion sync) — CONTEXT, not AUTHORITY (ADR-009) | Runtime memory: DEFERRED to post-M3; requires a new ADR |
@@ -468,7 +467,7 @@ Per `spec.md` Stop Condition:
 *Updated: ADR-009 ChromaDB boundary accepted — chromadb reclassified as a dev-only dependency, boundary machine-enforced via `tests/contract/test_runtime_boundary.py`, Knowledge Brain pseudo-test suite removed; baseline 127/127; CVE-2026-45829 absent from the production image (verified in-container); FAIL-004 posture corrected. Implemented by Cline, independently verified by SpecForge (Step 10 PASS). 4 commits pending push — 2026-08-24*  
 *Updated: ADR-007 amended — trace clause rewritten to match the implemented lineage model (provenance everywhere, `TRC-*` root trace where contracted, OTel span tracing deferred to T1000); FAIL-005 recorded for the overstated audit claim; docs-only change, suite re-verified green — 2026-08-24*
 
-*Updated: T700 (M2) — deployed forgemind-v3-prod to Cloud Run (us-central1), enabled BuildKit in deploy/cloudbuild.yaml (DOCKER_BUILDKIT=1) and granted allUsers run.invoker; health endpoint ok; FIXTURE-001-happy-path.json passes through deployed /api/v1/events (deployed response equivalent to local baseline, M2); service scaled to zero; deployed image forgemind:769353770798dece5fa0277f6a6f87ac2d50b508 retained in Artifact Registry — 2026-08-25*  
+*Updated: T700 (M2) — deployed forgemind-v3-prod to Cloud Run (us-central1), enabled BuildKit in deploy/cloudbuild.yaml (DOCKER_BUILDKIT=1) and granted allUsers run.invoker; health endpoint ok; FIXTURE-001-happy-path.json passes through deployed /api/v1/events (deployed response equivalent to local baseline, M2); service scaled to zero; live image is forgemind:f79c17a (M3 user-value fix) — STALE: does not include d9b3665 dark-theme UI or 6977327 docs rebuild; judges hitting /view/SIT-7000 see the old light-theme viewer — 2026-08-25*  
 *Updated: T025 reconciled — `d951587` (2026-08-25) already performed the W1–W4 normalization pass at the documentation level (constitution §4.2/§4.3, data-model, plan, spec.md L34 backtick, FIXTURE-001 `ingested_at`); Verified 127 passed / `run_fixture.py` 0 errors (docs-only). Known Issues & Next Actions rows updated to CLOSED/DONE. Residual: `tasks.md` T025 tracker row still `[ ]` unflipped (SpecForge) — 2026-08-25*
 
 *Refactor: modularised the single-file `src/forgemind/api.py` (1069 LOC) into the `forgemind.api` package — `errors.py` (constants), `models.py` (envelopes), `pipeline.py` (five-tier orchestration, no HTTP), `routes.py` (FastAPI factory + handlers), and a `dashboard/` subpackage (`css|constants|helpers|sections|render`) for the M3-A/T721 read-only judge-visible viewer. Pure code-move: the facade `api/__init__.py` re-exports the identical public surface (`create_api`, `run_pipeline`, `EventInput`, `_render_situation_html`, `app`, …), so `uvicorn forgemind.api:create_api --factory`, the Dockerfile, and existing tests are unchanged. Verified: 141/141 pytest green; rendered viewer byte-identical to the pre-move baseline (16465/15554/15554 chars for the action + escalation fixtures); app boots and `/api/v1/health`, `/view/SIT-7000`, and `POST /api/v1/events` (FIXTURE-007 → terminal action) all pass — 2026-08-27*

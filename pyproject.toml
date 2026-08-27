@@ -13,6 +13,10 @@ dependencies = [
     # forgemind.llm.adapter. Runtime dependency (NOT dev) — it is required
     # in the Cloud Run image so the bounded Gemini node can run.
     "google-genai>=2.19.0",
+    # ADK 2.0 integration layer (google-adk). Imported lazily inside
+    # forgemind.adk_app so the package boots cleanly without it (ADR-009
+    # import-boundary invariant). Required only when FORGEMIND_RUNTIME=adk.
+    "google-adk>=2.0.0",
 ]
 
 [build-system]

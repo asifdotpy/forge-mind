@@ -23,6 +23,10 @@ from forgemind.api.errors import PIPELINE_ERRORS, SERVICE_VERSION
 from forgemind.api.models import ApprovalDecision, EventInput
 from forgemind.api.pipeline import _fixture_body_for, run_pipeline
 
+# ADK routes are registered lazily inside create_api() so the deterministic
+# path is byte-for-byte unaffected when google-adk is not installed.
+from forgemind.api.adk_routes import register_adk_routes
+
 logger = logging.getLogger(__name__)
 
 def _contract_not_found(name: str) -> JSONResponse:
@@ -202,6 +206,10 @@ def create_api() -> FastAPI:
                 status_code=404,
                 content={"error": "not_found", "detail": str(exc)},
             )
+
+    # Register ADK 2.0 integration routes under /api/v1/adk/.
+    # Idempotent and safe when google-adk is not installed.
+    register_adk_routes(app)
 
     return app
 

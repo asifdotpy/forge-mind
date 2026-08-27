@@ -17,6 +17,7 @@ from forgemind.api.errors import PIPELINE_ERRORS, SERVICE_VERSION
 from forgemind.api.models import ApprovalDecision, EventInput
 from forgemind.api.pipeline import _fixture_body_for, run_pipeline
 from forgemind.api.routes import app, create_api
+from forgemind.api.adk_routes import register_adk_routes
 
 __all__ = [
     "ApprovalDecision",
@@ -28,5 +29,6 @@ __all__ = [
     "_render_situation_html",
     "app",
     "create_api",
+    "register_adk_routes",
     "run_pipeline",
 ]

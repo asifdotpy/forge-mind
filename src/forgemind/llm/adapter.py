@@ -36,7 +36,7 @@ from typing import List, Optional
 __all__ = ["generate_observations", "generate_claims", "DEFAULT_MODEL"]
 
 #: Default Gemini model (Gemini 3.5 Flash — cheapest 3.5 tier on Vertex).
-DEFAULT_MODEL = "gemini-3.5-flash"
+DEFAULT_MODEL = "gemini-2.5-flash"
 
 #: Hard caps so a runaway model response can never blow up a shard.
 _MAX_ITEMS = 25
