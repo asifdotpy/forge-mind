@@ -111,7 +111,7 @@ def register_adk_routes(app: FastAPI) -> None:
             )
             session_service = runner.session_service
 
-            # Ensure the session exists.
+            # Ensure the session exists (runner.run_async expects it to exist).
             try:
                 await session_service.get_session(
                     app_name=runner.app_name,
@@ -119,7 +119,6 @@ def register_adk_routes(app: FastAPI) -> None:
                     session_id=session_id,
                 )
             except Exception:
-                # Session doesn't exist yet — create it.
                 await session_service.create_session(
                     app_name=runner.app_name,
                     user_id="anonymous",
