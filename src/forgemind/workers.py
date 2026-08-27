@@ -269,11 +269,38 @@ class Worker(ABC):
     # -- deterministic derived values (subclasses may override) ----------
 
     def _confidence(self, context: dict) -> float:
-        """Confidence in [0, 1]; base returns context-confirmed confidence."""
+        """Confidence in [0, 1].
+
+        Returns context-confirmed confidence when explicitly provided;
+        otherwise derives a dynamic score from the changed-file surface:
+        base 0.85, minus 0.05 per changed file (capped at 0.3), minus 0.15
+        for security-sensitive files (auth/security/crypto), minus 0.1 for
+        critical-path files.  Result is always clamped to [0.0, 1.0].
+        """
         value = context.get("confidence")
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             return max(0.0, min(1.0, float(value)))
-        return 0.7
+
+        # Dynamic derivation when no explicit confidence is provided.
+        base = 0.85
+
+        inputs = context.get("inputs", {}) or {}
+        changed_files = inputs.get("changed_files") or []
+
+        # More changed files → lower confidence (max 0.3 reduction).
+        base -= min(0.3, len(changed_files) * 0.05)
+
+        # Security-sensitive files → lower confidence.
+        _security = ("auth", "security", "crypto")
+        if any(any(p in f.lower() for p in _security) for f in changed_files):
+            base -= 0.15
+
+        # Critical paths touched → lower confidence.
+        _critical = ("core/", "kernel/", "main.", "infra/", "db/", "config.")
+        if any(any(p in f.lower() for p in _critical) for f in changed_files):
+            base -= 0.1
+
+        return max(0.0, min(1.0, base))
 
     def _risk_level(self, context: dict) -> str:
         """Canonical risk level; defaults to ``medium``."""

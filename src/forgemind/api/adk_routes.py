@@ -120,6 +120,19 @@ def register_adk_routes(app: FastAPI) -> None:
             observations = generate_observations("code", context) or [f"Changed files: {', '.join(changed_files)}"]
             claims = generate_claims("code", context) or [f"Analysis of {len(changed_files)} changed file(s)"]
             
+            # Calculate dynamic confidence based on changed files
+            # Base 0.85, minus 0.05 per file (max 0.3 reduction), minus 0.15 if security-sensitive
+            num_files = len(changed_files)
+            confidence = 0.85
+            confidence -= min(num_files * 0.05, 0.3)
+            
+            # Check for security-sensitive files
+            security_patterns = ["auth", "security", "crypto", "password", "secret", "token"]
+            if any(any(p in f.lower() for p in security_patterns) for f in changed_files):
+                confidence -= 0.15
+            
+            confidence = max(0.0, min(1.0, confidence))
+            
             return {
                 "status": "ok",
                 "session_id": session_id,
@@ -128,7 +141,7 @@ def register_adk_routes(app: FastAPI) -> None:
                 "analysis": {
                     "observations": observations,
                     "claims": claims,
-                    "confidence": 0.7,
+                    "confidence": confidence,
                     "coverage_percent": 100,
                     "terminal": {
                         "type": "escalation",
