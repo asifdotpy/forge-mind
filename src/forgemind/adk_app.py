@@ -12,6 +12,13 @@ All ADK imports live inside :func:`create_adk_runner` and the route handlers.
 Activation: the ADK runner is only constructed when ``FORGEMIND_RUNTIME=adk``
 and ``google-adk`` is importable.  The deterministic pipeline is byte-for-byte
 unaffected otherwise.
+
+ROLE NOTE: the authoritative decision-execution graph is the hierarchical DAG
+in :func:`forgemind.adk_runtime.run_adk_pipeline` (Supervisor -> Managers ->
+Workers -> Validator -> Reducer -> Action Gate, with the pause/resume human
+gate).  The ``google.adk.Runner`` built here hosts the ``root_agent`` as a
+discovery / session-memory surface (``GET /api/v1/adk/agents``,
+``GET /api/v1/adk/sessions/...``); it is NOT used to execute decisions.
 """
 
 from __future__ import annotations

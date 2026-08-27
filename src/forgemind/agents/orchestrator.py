@@ -5,6 +5,14 @@ the root agent (and therefore the full five-tier DAG) inside a higher-level
 orchestration envelope: intake preparation -> root DAG execution ->
 finalization and recording.
 
+The authoritative decision-execution graph is the hierarchical DAG in
+:func:`forgemind.adk_runtime.run_adk_pipeline` — Acquire -> Supervisor (Tier 1)
+-> Domain Managers (Tier 2) -> Specialist Workers (Tier 3) -> Validator
+(Tier 4) -> Reducer (Tier 5) -> Action Gate, with parent->child delegation and
+the pause/resume human gate.  The orchestrator/SequentialAgent wrappers built
+by this module are Google ``google.adk`` coordination surfaces (a ``Runner``
+host for session-memory); they are NOT the execution graph.
+
 All ADK imports are deferred until call time so the module imports cleanly
 without google-adk installed.
 """

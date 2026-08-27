@@ -200,3 +200,113 @@ def test_no_chroma_in_runtime():
         f"{result.stdout} {result.stderr}"
     )
     assert "M3B_RUNTIME_OK" in result.stdout
+
+def test_adk_events_runs_real_dag():
+    """POST /api/v1/adk/events executes the hierarchical DAG, not a heuristic.
+
+    Asserts the endpoint returns the authoritative artifacts + m3_proof and
+    that the old Gemini-direct + ``changed_files``-count heuristic envelope
+    (``analysis``) is gone.  Parity with ``run_adk_pipeline`` is enforced by
+    comparing the terminal outcome on the action fixture.
+    """
+    from fastapi.testclient import TestClient
+
+    from forgemind.adk_runtime import run_adk_pipeline
+    from forgemind.api import create_api
+    from forgemind.api.models import EventInput
+
+    client = TestClient(create_api())
+
+    fixture = _load_fixture("FIXTURE-007-m3-judge-surface-action.json")
+    body = {
+        "event": fixture["event"],
+        "domain_findings": fixture.get("domain_findings"),
+        "workers": fixture.get("workers"),
+        "evidence_shards": fixture.get("evidence_shards"),
+    }
+
+    resp = client.post("/api/v1/adk/events", json=body)
+    assert resp.status_code == 200
+    d = resp.json()
+
+    # Real hierarchical DAG output surfaces, not the old heuristic envelope.
+    assert "analysis" not in d, "heuristic 'analysis' block must be removed"
+    assert d["agent"] == "forgemind_hierarchical_dag"
+    assert d["status"] == "ok"
+    assert d["autonomy"]["autonomy_class"] == "safe_autonomous"
+    assert d["actions_taken"] == [
+        "analysis_comment_posted",
+        "status_check_passed",
+    ]
+    assert d["terminal"]["type"] == "action"
+
+    # Full trajectory lineage is preserved (Event -> ... -> Terminal chain).
+    chain = d["m3_proof"]["provenance_links"]["artifact_chain"]
+    assert len(chain) == 7
+    assert chain[0]["artifact"] == "coverage_plan"
+    assert chain[-1]["artifact"] == "terminal"
+
+    # Parity with the underlying pipeline function for the same inputs.
+    pipeline_result = run_adk_pipeline(
+        EventInput(
+            event=fixture["event"],
+            domain_findings=fixture.get("domain_findings"),
+            workers=fixture.get("workers"),
+            evidence_shards=fixture.get("evidence_shards"),
+        )
+    )
+    assert pipeline_result["terminal"]["type"] == "action"
+    assert (
+        d["terminal"]["type"],
+        d["autonomy"]["autonomy_class"],
+    ) == (
+        pipeline_result["terminal"]["type"],
+        pipeline_result["m3_proof"]["human_control_state"]["autonomy_class"],
+    )
+
+
+def test_adk_events_event_only_is_conservative():
+    """A bare GitHub-PR event pauses (human_review), never auto-acts.
+
+    The real reducer is conservative: without pre-computed evidence the
+    validated confidence stays below the autonomous threshold, so the
+    /adk/events response is ``paused`` with a resume token.  This guards
+    against re-introducing the optimistic ``len(changed_files)`` heuristic.
+    """
+    from fastapi.testclient import TestClient
+
+    from forgemind.api import create_api
+
+    client = TestClient(create_api())
+
+    event = {
+        "event_id": "EVT-GUARD",
+        "situation_id": "SIT-GUARD",
+        "timestamp": "2026-08-27T10:00:00Z",
+        "source": "github",
+        "type": "pr",
+        "summary": "docs update",
+        "reference": "https://github.com/x/y/pull/1",
+        "affected_entities": ["x/y"],
+        "provenance": {"source_system": "github", "sender": "bot"},
+        "selected_domains": ["code"],
+        "selected_workers": ["pr-pre-flight-ast-worker"],
+        "require_human_above_risk_level": "critical",
+        "max_concurrent_managers": 3,
+        "global_timeout_seconds": 300,
+        "payload": {
+            "changed_files": ["README.md"],
+            "pr_number": 1,
+            "repo": "x/y",
+            "sha": "abc123",
+        },
+    }
+
+    d = client.post("/api/v1/adk/events", json={"event": event}).json()
+    assert d["status"] == "paused"
+    assert d["terminal"] is None
+    assert d["pending_approval"]["token"]
+    # No decision has been published yet, so no autonomous action may be taken.
+    assert d["autonomy"]["autonomy_class"] != "safe_autonomous"
+    assert d["actions_taken"] == []
+

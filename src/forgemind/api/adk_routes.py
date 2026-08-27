@@ -1,31 +1,45 @@
 """FastAPI routes for the ADK 2.0 integration layer.
 
-This module exposes the ADK runner behind a dedicated ``/api/v1/adk/``
+This module exposes the ADK integration behind a dedicated ``/api/v1/adk/``
 prefix so it coexists with the existing deterministic routes
 (``/api/v1/events``, ``/api/v1/health``) without conflict.
 
+Event ingestion (``POST /api/v1/adk/events``) drives the real hierarchical ADK
+DAG (:func:`forgemind.adk_runtime.run_adk_pipeline`) — Acquire -> Supervisor ->
+Managers -> Workers -> Validator -> Reducer -> human_approval -> Action Gate —
+and returns the genuine artifacts plus ``m3_proof`` (with the authoritative
+``human_control_state`` autonomy signal).  This path is stdlib-only, so it
+works without ``google-adk`` and in Cloud Run.
+
+The ``google.adk.Runner`` remains available as a discovery / session-memory
+surface (``GET /api/v1/adk/agents``, ``GET /api/v1/adk/sessions/...``) but is
+NOT the decision-execution graph; the hierarchical DAG above is authoritative.
+
 All ADK imports are lazy: the routes register and respond even when
-``google-adk`` is not installed (with a clear 503-style response rather
-than an import error), so local dev is never blocked.
+``google-adk`` is not installed.
 
 Routes:
-    POST /api/v1/adk/events          Ingest an event, run it through ADK agents
+    POST /api/v1/adk/events          Run an event through the hierarchical DAG
     POST /api/v1/adk/sessions/{id}/resume  Resume a paused workflow
     GET  /api/v1/adk/sessions/{id}   Get session state
     GET  /api/v1/adk/agents          List registered agents (discovery)
+    POST /api/v1/adk/webhook         GitHub webhook receiver
 """
 
 from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
+from forgemind.acquisition import EventValidationError
 from forgemind.adk_app import create_adk_runner, describe_adk_agents
+from forgemind.adk_runtime import run_adk_pipeline
+from forgemind.api.errors import PIPELINE_ERRORS
 
 logger = logging.getLogger(__name__)
 
@@ -33,12 +47,23 @@ logger = logging.getLogger(__name__)
 # -- Request envelopes -----------------------------------------------
 
 class AdkEventInput(BaseModel):
-    """Request envelope for ``POST /api/v1/adk/events``."""
+    """Request envelope for ``POST /api/v1/adk/events``.
+
+    Only ``event`` is required, mirroring ``forgemind.api.EventInput``: the
+    optional ``workers`` / ``evidence_shards`` / ``domain_findings`` keys let
+    callers supply pre-computed Tier-3/Tier-2 artifacts so the full autonomy
+    range (including ``safe_autonomous``) can be exercised through the real
+    hierarchical DAG.  When omitted, the self-sufficient worker-context path
+    runs instead.
+    """
 
     model_config = ConfigDict(extra="ignore")
 
     event: Dict[str, Any]
     session_id: Optional[str] = None
+    workers: Optional[Dict[str, Any]] = None
+    evidence_shards: Optional[List[Dict[str, Any]]] = None
+    domain_findings: Optional[List[Dict[str, Any]]] = None
 
 
 class AdkResumeInput(BaseModel):
@@ -71,6 +96,133 @@ def _get_runner() -> Any:
 _ADK_PAUSED: Dict[str, Dict[str, Any]] = {}
 
 
+# -- Response-envelope helpers --------------------------------------
+# The authoritative execution path for an ingested event is the hierarchical
+# ADK DAG (:func:`forgemind.adk_runtime.run_adk_pipeline`), which produces the
+# genuine artifacts + ``m3_proof`` (with the ``human_control_state`` autonomy
+# signal and the full trajectory lineage).  The envelope below surfaces that
+# signal at a stable top-level ``autonomy`` key plus a GitHub-ready
+# ``analysis_comment``, and derives ``actions_taken`` from the autonomy class.
+
+def _actions_for_autonomy(autonomy_class: Optional[str]) -> list:
+    """Map the reducer's autonomy class onto the executed-action labels."""
+    if autonomy_class == "safe_autonomous":
+        return ["analysis_comment_posted", "status_check_passed"]
+    if autonomy_class == "human_review":
+        return ["analysis_comment_posted"]
+    return []
+
+
+def _webhook_changed_files(repo: str, pr_number: int) -> list:
+    """Best-effort fetch of a PR's changed filenames for the webhook.
+
+    Degrades silently to an empty list when GITHUB_TOKEN is not configured or
+    the GitHub API call fails — the hierarchical DAG still runs on whatever
+    payload keys are present.
+    """
+    try:
+        from forgemind.tools.github_tools import get_changed_files
+
+        files = get_changed_files(repo, pr_number)
+        if isinstance(files, list) and files and not files[0].get("error"):
+            return [
+                f.get("filename", "")
+                for f in files
+                if isinstance(f, dict) and f.get("filename")
+            ]
+    except Exception:  # noqa: BLE001
+        logger.debug("webhook changed_files lookup failed", exc_info=True)
+    return []
+
+
+def _analysis_comment_from(result: Dict[str, Any]) -> str:
+    """Render a Markdown analysis comment from the real pipeline result.
+
+    Everything here is derived from authoritative artifacts — the reducer's
+    autonomy/risk and the gate's verdict — never from ``changed_files`` count.
+    """
+    m3 = result.get("m3_proof") or {}
+    control = m3.get("human_control_state") or {}
+    verdict = m3.get("validation_verdict") or {}
+    uncertainty = m3.get("uncertainty_summary") or {}
+    terminal = result.get("terminal") or {}
+
+    confidence = uncertainty.get("confidence")
+    reasoning_path = result.get("situation_id")
+
+    lines = [
+        "## ForgeMind Analysis",
+        "",
+        f"**Status:** {result.get('status', 'ok')}",
+        f"**Situation:** {reasoning_path or 'n/a'}",
+        f"**Autonomy Class:** {control.get('autonomy_class') or 'n/a'}",
+        f"**Human Control:** {control.get('state') or 'n/a'}",
+        f"**Confidence:** {confidence if confidence is not None else 'n/a'}",
+        f"**Risk Level:** {control.get('risk_level') or 'n/a'}",
+        f"**Verdict:** {verdict.get('state') or 'n/a'}",
+    ]
+
+    if terminal.get("type") in ("action", "escalation"):
+        action_validation = terminal.get("action_validation") or {}
+        escalation = terminal.get("escalation") or {}
+        reason = (
+            action_validation.get("reason")
+            or escalation.get("reason")
+            or "n/a"
+        )
+        lines.append(f"**Terminal:** {terminal.get('type')}")
+        lines.append(f"**Reason:** {reason}")
+
+    lines.append("")
+    lines.append("---")
+    lines.append("*Generated by ForgeMind hierarchical ADK DAG*")
+    return "\n".join(lines)
+
+
+def _render_adk_response(
+    event: Dict[str, Any],
+    session_id: str,
+    result: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Project the hierarchical-DAG result onto the /adk/events envelope.
+
+    ``result`` is the dict returned by ``run_adk_pipeline``; its ``m3_proof``
+    block is already computed, so the autonomy signal here is authoritative.
+    """
+    m3 = result.get("m3_proof") or {}
+    control = m3.get("human_control_state") or {}
+    uncertainty = m3.get("uncertainty_summary") or {}
+
+    autonomy_class = control.get("autonomy_class")
+    status = result.get("status", "ok")
+
+    return {
+        "status": status,
+        "session_id": session_id,
+        "agent": "forgemind_hierarchical_dag",
+        "event": event,
+        "situation_id": result.get("situation_id"),
+        "trace_id": result.get("trace_id"),
+        "autonomy": {
+            "autonomy_class": autonomy_class,
+            "risk_level": control.get("risk_level"),
+            "confidence": uncertainty.get("confidence"),
+            "human_control_state": control.get("state"),
+            "requires_human": status == "paused",
+        },
+        "terminal": result.get("terminal"),
+        "pending_approval": result.get("pending_approval"),
+        "artifacts": result.get("artifacts"),
+        "m3_proof": m3,
+        "analysis_comment": _analysis_comment_from(result),
+        "actions_taken": _actions_for_autonomy(autonomy_class),
+        "memory": {
+            "patterns_recalled": [],
+            "session_stored": False,
+        },
+    }
+
+
 # -- Route registration ---------------------------------------------
 
 def register_adk_routes(app: FastAPI) -> None:
@@ -83,122 +235,53 @@ def register_adk_routes(app: FastAPI) -> None:
 
     @app.post("/api/v1/adk/events")
     async def adk_ingest_event(body: AdkEventInput):
-        """Ingest an Event and run it through the ADK agent graph.
+        """Ingest an Event and run it through the real hierarchical ADK DAG.
 
-        When google-adk is not installed, returns HTTP 503 with a clear
-        message rather than an import error.
+        Executes :func:`forgemind.adk_runtime.run_adk_pipeline`, which drives
+        the genuine graph over the existing tiers -- Acquire -> Supervisor ->
+        Managers -> Workers -> Validator -> Reducer -> human_approval ->
+        Action Gate -- with the documented autonomy ladder and pause/resume
+        gate.  This path is stdlib-only (no google-adk required) and produces
+        the full artifact trajectory plus ``m3_proof``.
+
+        When the Action Validation gate decides the proposed action needs a
+        human, the workflow PAUSES: the response ``status`` is ``"paused"``
+        and ``pending_approval.token`` is the resume key (post it to
+        ``POST /api/v1/approvals/{token}``).
         """
-        runner = _get_runner()
-        if runner is None:
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "error": "adk_unavailable",
-                    "detail": (
-                        "google-adk is not installed. Install with "
-                        "`uv pip install google-adk>=2.0.0` and restart."
-                    ),
-                },
-            )
-
         session_id = body.session_id or uuid.uuid4().hex
         try:
-            # Call Gemini directly using the existing adapter
-            from forgemind.llm.adapter import generate_observations, generate_claims
-            
-            event = body.event
-            payload = event.get("payload", {})
-            changed_files = payload.get("changed_files", [])
-            
-            context = {
-                "inputs": {"changed_files": changed_files},
-                "summary": event.get("summary", ""),
-                "source": event.get("source", ""),
-                "type": event.get("type", ""),
-            }
-            
-            observations = generate_observations("code", context) or [f"Changed files: {', '.join(changed_files)}"]
-            claims = generate_claims("code", context) or [f"Analysis of {len(changed_files)} changed file(s)"]
-            
-            # Calculate dynamic confidence based on changed files
-            # Base 0.85, minus 0.05 per file (max 0.3 reduction), minus 0.15 if security-sensitive
-            num_files = len(changed_files)
-            confidence = 0.85
-            confidence -= min(num_files * 0.05, 0.3)
-            
-            # Check for security-sensitive files
-            security_patterns = ["auth", "security", "crypto", "password", "secret", "token"]
-            has_security = any(any(p in f.lower() for p in security_patterns) for f in changed_files)
-            if has_security:
-                confidence -= 0.15
-            
-            confidence = round(max(0.0, min(1.0, confidence)), 2)
-            
-            # Determine autonomy level based on confidence
-            # >= 0.8 = safe_autonomous, >= 0.5 = human_review, < 0.5 = escalate
-            if confidence >= 0.8 and not has_security:
-                autonomy_class = "safe_autonomous"
-            elif confidence >= 0.5:
-                autonomy_class = "human_review"
-            else:
-                autonomy_class = "escalate"
-            
-            # Build analysis comment for GitHub
-            analysis_body = f"## ForgeMind Analysis\n\n"
-            analysis_body += f"**Confidence:** {confidence:.2f}\n"
-            analysis_body += f"**Autonomy Class:** {autonomy_class}\n\n"
-            analysis_body += f"### Observations\n"
-            for obs in observations[:5]:
-                analysis_body += f"- {obs}\n"
-            analysis_body += f"\n### Claims\n"
-            for claim in claims[:5]:
-                analysis_body += f"- {claim}\n"
-            analysis_body += f"\n---\n*Generated by ForgeMind ADK 2.0 • {session_id}*"
-            
-            # Execute actions based on autonomy class
-            actions_taken = []
-            
-            if autonomy_class == "safe_autonomous":
-                # Auto-approve: post comment + update status to success
-                actions_taken.append("analysis_comment_posted")
-                actions_taken.append("status_check_passed")
-                terminal_type = "action"
-                terminal_reason = "auto_approved"
-            elif autonomy_class == "human_review":
-                # Post analysis but escalate for human approval
-                actions_taken.append("analysis_comment_posted")
-                terminal_type = "escalation"
-                terminal_reason = "human_review_required"
-            else:
-                # High risk: escalate without auto-action
-                terminal_type = "escalation"
-                terminal_reason = "low_confidence"
-            
-            return {
-                "status": "ok",
-                "session_id": session_id,
-                "agent": "forgemind_adk",
-                "event": event,
-                "analysis": {
-                    "observations": observations,
-                    "claims": claims,
-                    "confidence": confidence,
-                    "coverage_percent": 100,
-                    "autonomy_class": autonomy_class,
-                    "has_security_concerns": has_security,
-                    "terminal": {
-                        "type": terminal_type,
-                        "reason": terminal_reason,
-                    },
+            # Drive the real five-tier hierarchy. ``EventInput`` only needs
+            # ``event``: when no explicit workers/evidence_shards/domain_findings
+            # are supplied, the self-sufficient worker-context path derives
+            # per-worker evidence from the payload.
+            from forgemind.api.models import EventInput
+
+            pipeline_result = run_adk_pipeline(
+                EventInput(
+                    event=body.event,
+                    workers=body.workers,
+                    evidence_shards=body.evidence_shards,
+                    domain_findings=body.domain_findings,
+                )
+            )
+        except EventValidationError as exc:
+            logger.warning("ADK event validation failed: %s", exc)
+            return JSONResponse(
+                status_code=422,
+                content={"error": "validation_error", "detail": str(exc)},
+            )
+        except PIPELINE_ERRORS as exc:
+            logger.exception("ADK pipeline failure for session %s", session_id)
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": "pipeline_error",
+                    "detail": str(exc),
+                    "session_id": session_id,
                 },
-                "actions_taken": actions_taken,
-                "analysis_comment": analysis_body,
-                "memory": {
-                    "patterns_recalled": [],
-                    "session_stored": False,
-                },
-            }
-        except Exception as exc:
+            )
+        except Exception as exc:  # noqa: BLE001
             logger.exception("ADK agent failed for session %s", session_id)
             return JSONResponse(
                 status_code=500,
@@ -209,6 +292,7 @@ def register_adk_routes(app: FastAPI) -> None:
                 },
             )
 
+        return _render_adk_response(body.event, session_id, pipeline_result)
     @app.post("/api/v1/adk/sessions/{session_id}/resume")
     async def adk_resume_session(session_id: str, body: AdkResumeInput):
         """Resume a paused ADK workflow after a human decision."""
@@ -330,7 +414,7 @@ def register_adk_routes(app: FastAPI) -> None:
                 "max_concurrent_managers": 3,
                 "global_timeout_seconds": 300,
                 "payload": {
-                    "changed_files": [],  # Will be populated from GitHub API
+                    "changed_files": _webhook_changed_files(repo, pr["number"]),
                     "pr_number": pr["number"],
                     "repo": repo,
                     "sha": pr.get("head", {}).get("sha", ""),
@@ -341,9 +425,10 @@ def register_adk_routes(app: FastAPI) -> None:
             result = await adk_ingest_event(AdkEventInput(event=event))
             
             # If autonomous, actually post to GitHub
-            if isinstance(result, dict) and result.get("analysis", {}).get("autonomy_class") == "safe_autonomous":
+            autonomy = result.get("autonomy", {}) if isinstance(result, dict) else {}
+            if autonomy.get("autonomy_class") == "safe_autonomous":
                 # Post comment to PR
-                analysis_comment = result.get("analysis_comment", "")
+                analysis_comment = result.get("analysis_comment", "") if isinstance(result, dict) else ""
                 if analysis_comment and event["payload"].get("pr_number"):
                     from forgemind.tools.github_tools import post_comment
                     post_comment(

@@ -4,6 +4,16 @@ Builds the top-level SequentialAgent that wires the five-tier DAG
 (Supervisor -> Workers -> Managers -> Validator -> Reducer -> Action Gate)
 into a single ADK agent graph.
 
+NOTE ON ROLE (hierarchy): the authoritative decision-execution path in
+ForgeMind is the hierarchical DAG in :func:`forgemind.adk_runtime.run_adk_pipeline`
+— Acquire -> Supervisor (Tier 1) -> Domain Managers (Tier 2) -> Specialist
+Workers (Tier 3) -> Validator (Tier 4) -> Reducer (Tier 5) -> Action Gate —
+with parent->child delegation and the pause/resume human gate.  This module's
+SequentialAgent is a Google ``google.adk`` discovery / coordination surface
+(a ``Runner`` host for session-memory); it is NOT the execution graph and must
+not be mistaken for one.  The tier ``LlmAgent`` wrappers below carry only
+name/description/model/instruction and do no delegation logic.
+
 The root agent is constructed lazily; all ADK imports are deferred until
 call time so the module imports cleanly without google-adk installed.
 """
