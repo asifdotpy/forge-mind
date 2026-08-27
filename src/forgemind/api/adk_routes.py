@@ -132,7 +132,7 @@ def register_adk_routes(app: FastAPI) -> None:
             if has_security:
                 confidence -= 0.15
             
-            confidence = max(0.0, min(1.0, confidence))
+            confidence = round(max(0.0, min(1.0, confidence)), 2)
             
             # Determine autonomy level based on confidence
             # >= 0.8 = safe_autonomous, >= 0.5 = human_review, < 0.5 = escalate
