@@ -79,13 +79,15 @@ def _run_loader_subprocess(env_file: Path, extra_env: dict[str, str]) -> subproc
         """
         import os
         from forgemind._env import load_dotenv
-        first = load_dotenv()
-        second = load_dotenv()  # idempotence: second call must be a no-op
-        assert first, "expected keys to be applied on first call"
-        assert second == [], "expected the second call to be a no-op"
+        # Note: importing forgemind already applied the env file — the package
+        # __init__ re-exports the api factory, whose module-level
+        # ``app = create_api()`` runs load_dotenv() at import time. So assert
+        # observable outcomes plus one-shot idempotence, not the return of the
+        # first explicit call.
         assert os.environ["SENTINEL_KEY"] == "from-dotenv"
         assert os.environ["PRESET_KEY"] == "shell-wins"
-        print(",".join(sorted(first)))
+        assert load_dotenv() == [], "load_dotenv must be one-shot per process"
+        print("OK")
         """
     )
     return subprocess.run(
@@ -106,7 +108,7 @@ def test_load_dotenv_outside_pytest_loads_file_once_and_respects_precedence(tmp_
     )
     result = _run_loader_subprocess(env_file, {"PRESET_KEY": "shell-wins"})
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "SENTINEL_KEY"
+    assert result.stdout.strip() == "OK"
 
 
 def test_load_dotenv_missing_file_is_silent_outside_pytest(tmp_path):

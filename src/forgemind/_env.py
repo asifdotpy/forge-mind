@@ -17,6 +17,13 @@ Safety rails:
   nothing there and the service keeps using platform-injected env vars.
 * Only key *names* are ever returned — never values — so callers can log the
   result safely.
+
+When it runs: ``create_api()`` (the uvicorn ``--factory`` target) calls this,
+and because ``forgemind/__init__.py`` re-exports the api factory — whose
+module-level ``app = create_api()`` executes at import — any plain
+``import forgemind`` outside pytest also applies ``.env``. Both routes
+converge on the same one-shot call, so the file is read at most once per
+process.
 """
 
 from __future__ import annotations
