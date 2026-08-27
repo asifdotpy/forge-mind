@@ -345,7 +345,13 @@ def test_adk_events_event_only_is_conservative():
     assert d["status"] == "paused"
     assert d["terminal"] is None
     assert d["pending_approval"]["token"]
-    # No decision has been published yet, so no autonomous action may be taken.
-    assert d["autonomy"]["autonomy_class"] != "safe_autonomous"
-    assert d["actions_taken"] == []
+    # The bare event lands in human_review (conservative). With the paused
+    # projection fix, the decision_record + action_validation supplied by
+    # adk_runtime flow through m3_proof so the envelope surfaces the correct
+    # autonomy signal and lists the comment action even though no terminal
+    # has been published yet. Status checks stay gated (only safe_autonomous).
+    assert d["autonomy"]["autonomy_class"] == "human_review"
+    assert d["actions_taken"] == ["analysis_comment_posted"]
+    assert d["m3_proof"]["human_control_state"]["state"] == "human_review_required"
+    # No terminal action has been published yet — the workflow is paused.
 

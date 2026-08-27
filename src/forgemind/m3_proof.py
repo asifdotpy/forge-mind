@@ -93,9 +93,14 @@ def build_m3_proof(pipeline_result: Dict[str, Any]) -> Dict[str, Any]:
     findings = _list(artifacts.get("domain_findings"))
     validated = _dict(artifacts.get("validated_situation"))
 
-    decision_record = _dict(terminal.get("decision_record"))
+    # When deposited at the top level of an `adk_runtime` result the decision
+    # record and action_validation are stored directly (not inside `terminal`),
+    # e.g. for paused workflows. Use those when `terminal` does not carry them.
+    result_decision = _dict(result.get("decision_record"))
+    result_validation = _dict(result.get("action_validation"))
+    decision_record = _dict(terminal.get("decision_record")) or result_decision
     proposed_action = _dict(terminal.get("proposed_action"))
-    action_validation = _dict(terminal.get("action_validation"))
+    action_validation = _dict(terminal.get("action_validation")) or result_validation
     escalation = _dict(terminal.get("escalation"))
 
     terminal_type = terminal.get("type")

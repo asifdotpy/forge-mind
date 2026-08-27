@@ -14,11 +14,11 @@ threshold ladder:
                         (state machine: ``decision_ready -> escalated``
                         / ``closed_inconclusive``).
 - ``human_review``    — confidence below ``AUTONOMOUS_CONFIDENCE``
-                        (0.8), or causality not established
+                        (0.75), or causality not established
                         (``correlated`` / ``unsupported``).  A
                         ``ProposedAction`` IS emitted but flagged
                         ``requires_human=True``.
-- ``safe_autonomous`` — confidence >= 0.8 AND causality ``supported``
+- ``safe_autonomous`` — confidence >= 0.75 AND causality ``supported``
                         or ``verified`` AND zero conflicting evidence
                         AND full coverage.  The action may proceed
                         autonomously.

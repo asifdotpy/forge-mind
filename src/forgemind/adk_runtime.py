@@ -121,6 +121,8 @@ def _assemble_result(
     status: str = "ok",
     human_decision: Optional[str] = None,
     pending_approval: Optional[dict] = None,
+    decision_record: Optional[dict] = None,
+    action_validation: Optional[dict] = None,
 ) -> dict:
     """Build the pipeline-shaped result (mirrors ``api.run_pipeline``)."""
     result: Dict[str, Any] = {
@@ -136,6 +138,10 @@ def _assemble_result(
             "validated_situation": validated,
         },
     }
+    if decision_record is not None:
+        result["decision_record"] = decision_record
+    if action_validation is not None:
+        result["action_validation"] = action_validation
     if pending_approval is not None:
         result["pending_approval"] = pending_approval
     if human_decision is not None:
@@ -244,6 +250,8 @@ def run_adk_pipeline(body: Any) -> Dict[str, Any]:
                 terminal=None,
                 status="paused",
                 pending_approval=pending_approval,
+                decision_record=decision_record,
+                action_validation=gated["action_validation"],
             )
 
         # No human required -> publish through the structural no-bypass point.
