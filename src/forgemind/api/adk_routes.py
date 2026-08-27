@@ -103,28 +103,43 @@ def register_adk_routes(app: FastAPI) -> None:
 
         session_id = body.session_id or uuid.uuid4().hex
         try:
-            # ADK Runner.run() drives the event through the agent graph.
-            # The exact call shape depends on the ADK version; we guard
-            # with a try/except so a version mismatch surfaces cleanly.
-            from google.adk import types as adk_types  # type: ignore[import-untyped]
+            from google.genai import types as adk_types
 
-            user_content = adk_types.Content.from_text(text=str(body.event))
+            user_content = adk_types.Content(
+                role="user",
+                parts=[adk_types.Part(text=str(body.event))],
+            )
             session_service = runner.session_service
 
             # Ensure the session exists.
-            session_service.get_session(
-                app_name=runner.app_name,
-                user_id="anonymous",
-                session_id=session_id,
-            )
+            try:
+                session_service.get_session(
+                    app_name=runner.app_name,
+                    user_id="anonymous",
+                    session_id=session_id,
+                )
+            except Exception:
+                # Session doesn't exist yet — create it.
+                import asyncio
+                asyncio.run(session_service.create_session(
+                    app_name=runner.app_name,
+                    user_id="anonymous",
+                    session_id=session_id,
+                ))
 
-            events = []
-            for event in runner.run(
-                user_id="anonymous",
-                session_id=session_id,
-                new_message=user_content,
-            ):
-                events.append(event.model_dump() if hasattr(event, "model_dump") else str(event))
+            import asyncio
+
+            async def run_agent():
+                events = []
+                async for event in runner.run_async(
+                    user_id="anonymous",
+                    session_id=session_id,
+                    new_message=user_content,
+                ):
+                    events.append(event.model_dump() if hasattr(event, "model_dump") else str(event))
+                return events
+
+            events = asyncio.run(run_agent())
 
             return {
                 "status": "ok",
