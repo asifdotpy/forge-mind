@@ -135,6 +135,60 @@ def _webhook_changed_files(repo: str, pr_number: int) -> list:
     return []
 
 
+def _execute_github_actions(event: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
+    """Actually perform the GitHub actions the autonomy ladder selected.
+
+    The response envelope derives ``actions_taken`` from the reducer's
+    autonomy class (via :func:`_actions_for_autonomy`); this function executes
+    exactly those actions so the envelope is not just decorative:
+
+    - ``analysis_comment_posted``  -> post the analysis comment on the PR
+      (non-destructive; fires for both ``safe_autonomous`` and ``human_review``).
+    - ``status_check_passed``      -> mark the head commit's ``forgemind``
+      status ``success`` (autonomous only).
+
+    Each tool returns a dict; on a missing/invalid token it returns
+    ``{"error": "GITHUB_TOKEN not configured"}`` which is logged and surfaced
+    in the returned ``actions_result`` so a blocked write is visible rather
+    than silently swallowed.
+    """
+    actions = (result or {}).get("actions_taken", []) or []
+    payload = (event or {}).get("payload", {}) or {}
+    repo = payload.get("repo")
+    pr_number = payload.get("pr_number")
+    sha = payload.get("sha")
+
+    executed: Dict[str, Any] = {}
+
+    if "analysis_comment_posted" in actions and repo and pr_number:
+        from forgemind.tools.github_tools import post_comment
+
+        comment = (result or {}).get("analysis_comment") or ""
+        if comment:
+            executed["analysis_comment_posted"] = post_comment(
+                repo=repo, pr_number=pr_number, body=comment
+            )
+        else:
+            executed["analysis_comment_posted"] = {"skipped": "no analysis_comment"}
+
+    if "status_check_passed" in actions and repo and sha:
+        from forgemind.tools.github_tools import update_status_check
+
+        executed["status_check_passed"] = update_status_check(
+            repo=repo,
+            sha=sha,
+            state="success",
+            description="ForgeMind autonomous analysis passed",
+            context="forgemind",
+        )
+
+    for action, outcome in executed.items():
+        if isinstance(outcome, dict) and outcome.get("error"):
+            logger.warning("GitHub action %s blocked: %s", action, outcome["error"])
+
+    return executed
+
+
 def _analysis_comment_from(result: Dict[str, Any]) -> str:
     """Render a Markdown analysis comment from the real pipeline result.
 
@@ -423,20 +477,10 @@ def register_adk_routes(app: FastAPI) -> None:
             
             # Process the event
             result = await adk_ingest_event(AdkEventInput(event=event))
-            
-            # If autonomous, actually post to GitHub
-            autonomy = result.get("autonomy", {}) if isinstance(result, dict) else {}
-            if autonomy.get("autonomy_class") == "safe_autonomous":
-                # Post comment to PR
-                analysis_comment = result.get("analysis_comment", "") if isinstance(result, dict) else ""
-                if analysis_comment and event["payload"].get("pr_number"):
-                    from forgemind.tools.github_tools import post_comment
-                    post_comment(
-                        repo=event["payload"]["repo"],
-                        pr_number=event["payload"]["pr_number"],
-                        body=analysis_comment,
-                    )
-            
+            if isinstance(result, dict):
+                # Execute exactly the actions autonomy selected (comment for
+                # safe_autonomous + human_review; status check for autonomous).
+                result["actions_result"] = _execute_github_actions(event, result)
             return result
         
         return {"status": "ignored", "reason": "event_type_not_handled"}

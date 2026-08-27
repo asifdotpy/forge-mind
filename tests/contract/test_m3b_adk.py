@@ -265,6 +265,45 @@ def test_adk_events_runs_real_dag():
     )
 
 
+def test_webhook_executes_actions_token_missing():
+    """Webhook surfaces a visible 'token not configured' instead of silent skip.
+
+    With GITHUB_TOKEN unset, the DAG still runs and returns a paused/human
+    outcome with no actions; for a safe_autonomous payload the dispatcher would
+    attempt writes and report the missing token.  This guards the dispatch
+    wiring (checks actions_taken, not just autonomy_class) against regressions.
+    """
+    from forgemind.api.adk_routes import _execute_github_actions
+
+    # safe_autonomous result advertises both actions; without a token both
+    # tools return the "not configured" error dict.
+    result = {
+        "actions_taken": [
+            "analysis_comment_posted",
+            "status_check_passed",
+        ],
+        "analysis_comment": "## ForgeMind Analysis",
+    }
+    event = {
+        "payload": {
+            "repo": "owner/test-repo",
+            "pr_number": 7,
+            "sha": "deadbeef",
+        }
+    }
+    executed = _execute_github_actions(event, result)
+    assert "analysis_comment_posted" in executed
+    assert "status_check_passed" in executed
+    for outcome in executed.values():
+        assert isinstance(outcome, dict) and outcome.get("error")
+
+    # human_review advertises only the comment action (status stays gated).
+    result2 = {"actions_taken": ["analysis_comment_posted"], "analysis_comment": "x"}
+    executed2 = _execute_github_actions(event, result2)
+    assert "analysis_comment_posted" in executed2
+    assert "status_check_passed" not in executed2
+
+
 def test_adk_events_event_only_is_conservative():
     """A bare GitHub-PR event pauses (human_review), never auto-acts.
 
