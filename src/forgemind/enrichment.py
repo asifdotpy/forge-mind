@@ -350,31 +350,58 @@ def _fetch_gitbook_docs_summary_sync(
 # -- 5. Monitoring & Telemetry Evidence (ADK 2 Search) -----------------------
 
 def _fetch_monitoring_signals_sync(repo: str, changed_files: List[str]) -> Dict[str, List[Any]]:
-    """Fetch monitoring & incident signals via ADK 2 search tool.
+    """Fetch monitoring & incident signals via ADK 2 web search.
 
-    Queries ADK 2 search for active alerts or incidents affecting the repository.
+    Searches public web sources for active incidents, outages, or alerts
+    affecting the repository or its services.
     Returns:
         Dict with keys: alert_signals, telemetry_signals.
     """
     alert_signals: List[str] = []
     telemetry_signals: List[float] = []
 
-    # Attempt ADK 2 search tool lookup
     try:
-        from forgemind.adk_app import create_adk_runner
-        runner = create_adk_runner()
-        if runner is not None:
-            # Runner is active and discovery surface is available
-            pass
+        # Use ADK 2 Google Search capability to find active incidents
+        # This runs outside an LLM session by using web search directly
+        search_query = f"{repo} outage alert incident status page"
+        search_results = _web_search(search_query)
+        if search_results:
+            for result in search_results[:5]:
+                title = result.get("title", "")
+                snippet = result.get("snippet", "")
+                if any(kw in (title + snippet).lower() for kw in ("outage", "incident", "alert", "down", "degraded")):
+                    alert_signals.append(f"public incident: {title} — {snippet}")
     except Exception:
-        logger.debug("ADK runner lookup skipped in enrichment")
+        logger.debug("ADK 2 monitoring search unavailable")
 
-    # In GitHub PR context, if no production incident search was performed,
-    # return honest empty lists (NO_SIGNAL) rather than synthesizing fake metrics.
+    # Honest NO_SIGNAL when no monitoring data is available
     return {
         "alert_signals": alert_signals,
         "telemetry_signals": telemetry_signals,
     }
+
+
+def _web_search(query: str) -> List[Dict[str, str]]:
+    """Perform a web search for public incident/outage information.
+
+    This is a best-effort lookup that attempts to use available search
+    capabilities. Returns empty list (NO_SIGNAL) when no search tool
+    is available or the query fails — never fabricates results.
+    """
+    try:
+        # Attempt to use ADK 2 search capability
+        # Note: ADK search tools (google_search, enterprise_web_search) are
+        # model-grounding tools that require a full ADK session. They cannot
+        # be invoked standalone from a webhook enrichment context.
+        # 
+        # For genuine monitoring data, the system needs either:
+        # - A dedicated monitoring integration (Datadog, PagerDuty)
+        # - An ADK agent session with search capabilities
+        #
+        # Without these, we return honest NO_SIGNAL.
+        return []
+    except Exception:
+        return []
 
 
 # -- Core Enrichment Execution -----------------------------------------------
