@@ -55,7 +55,31 @@ def action_result() -> dict:
 
 @pytest.fixture(scope="module")
 def escalation_result() -> dict:
-    return _run(ESCALATION_FIXTURES[0])
+    return _escalation_scenario()
+
+
+def _escalation_scenario() -> dict:
+    """End-to-end escalation via a REAL coverage gap (the ADR-011 world).
+
+    Under the multi-domain policy every selected worker runs and reports
+    ("no signal" claims), so FIXTURE-002's full run no longer escalates.
+    To keep genuine escalation coverage at the surface level, replay the
+    same event with only the code-domain finding: the remaining selected
+    domains contribute nothing (the worker-error scenario) and Tier 5
+    escalates on the coverage gap.
+    """
+    full = _run("FIXTURE-002-escalation.json")
+    code_findings = [
+        f
+        for f in full["artifacts"]["domain_findings"]
+        if f.get("domain") == "code"
+    ]
+    payload = json.loads(
+        (FIXTURES_INPUT / "FIXTURE-002-escalation.json").read_text(encoding="utf-8")
+    )
+    return run_pipeline(
+        EventInput(event=payload["event"], domain_findings=code_findings)
+    )
 
 
 def test_m3_proof_present_on_events_response(action_result, escalation_result):
@@ -100,13 +124,27 @@ def test_validation_verdict_action(action_result):
     assert verdict["validation_id"]
 
 
-def test_validation_verdict_escalation():
-    for fixture_name in ESCALATION_FIXTURES:
-        result = _run(fixture_name)
-        proof = result["m3_proof"]
-        assert result["terminal"]["type"] == "escalation", fixture_name
-        assert proof["validation_verdict"]["state"] == "escalated", fixture_name
-        assert proof["human_control_state"]["required_human_role"], fixture_name
+def test_validation_verdict_escalation(escalation_result):
+    result = escalation_result
+    proof = result["m3_proof"]
+    assert result["terminal"]["type"] == "escalation"
+    assert proof["validation_verdict"]["state"] == "escalated"
+    assert proof["human_control_state"]["required_human_role"]
+
+
+def test_multi_domain_presence_corroboration_is_autonomous():
+    """ADR-011: FIXTURE-002 (multi-domain incident, every selected worker
+    runs and reports) now correlates across domains and completes
+    autonomously instead of escalating."""
+    result = _run("FIXTURE-002-escalation.json")
+    vs = result["artifacts"]["validated_situation"]
+    assert vs["causality_status"] == "correlated"
+    assert vs["coverage"]["missing_domains"] == []
+    assert vs["coverage"]["coverage_percentage"] == 100
+    terminal = result["terminal"]
+    assert terminal["type"] == "action"
+    assert terminal["decision_record"]["autonomy_class"] == "safe_autonomous"
+    assert terminal["action_validation"]["policy_result"] == "allowed"
 
 
 def test_uncertainty_summary_shape(action_result, escalation_result):

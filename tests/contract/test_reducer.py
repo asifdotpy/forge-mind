@@ -274,41 +274,46 @@ def test_safe_autonomous_risk_low_and_status_proposed():
     assert action["status"] == "proposed"
 
 
-def test_human_review_on_mid_band_confidence():
+def test_mid_band_correlation_reaches_safe_autonomous():
     situation, _plan = _correlated_situation(confidence=0.65)
     outcome = REDUCER.reduce(situation)
     record = outcome["decision_record"]
     action = outcome["proposed_action"]
 
     assert outcome["escalation"] is None
-    assert record["autonomy_class"] == "human_review"
-    assert record["requires_human"] is True
-    assert record["risk_level"] == "medium"
-    assert action["required_authority"] == "engineering-on-call"
+    # Findings average 0.70; the evidence boost (+0.05, full coverage +
+    # established correlation) lifts it to the 0.75 autonomous line
+    # (ADR-011: multi-domain correlation counts as established).
+    assert record["autonomy_class"] == "safe_autonomous"
+    assert record["requires_human"] is False
+    assert record["risk_level"] == "low"
+    assert action["required_authority"] == "none"
     jsonschema.validate(record, DR_SCHEMA)
     jsonschema.validate(action, PA_SCHEMA)
 
 
-def test_human_review_when_causality_not_established():
-    # Confidence above the autonomous line but correlation-only evidence.
+def test_correlated_counts_as_established_causality():
+    # Confidence above the autonomous line; correlated (presence-based,
+    # ADR-011) causality now counts as established -> safe_autonomous.
     situation, _plan = _correlated_situation(confidence=0.8)
     outcome = REDUCER.reduce(situation)
     record = outcome["decision_record"]
-    assert record["autonomy_class"] == "human_review"
-    assert record["requires_human"] is True
+    assert record["autonomy_class"] == "safe_autonomous"
+    assert record["requires_human"] is False
 
 
-def test_escalates_below_half_confidence_with_uncertainty_reason():
+def test_evidence_boost_lifts_subthreshold_confidence_to_human_review():
+    # Raw confidence 0.45 (< 0.5 escalate line) but well-evidenced: the
+    # boost lifts it to 0.50, so instead of escalating the reducer proposes
+    # an action that still requires a human.
     situation, plan = _low_confidence_situation(base_confidence=0.45)
     outcome = REDUCER.reduce(situation)
 
-    assert outcome["proposed_action"] is None
-    escalation = outcome["escalation"]
-    jsonschema.validate(escalation, ESC_SCHEMA)
-    assert outcome["decision_record"]["autonomy_class"] == "escalate"
-    assert outcome["decision_record"]["requires_human"] is True
-    assert escalation["reason"] == "uncertainty"
-    assert escalation["situation_id"] == plan["situation_id"]
+    assert outcome["proposed_action"] is not None
+    record = outcome["decision_record"]
+    jsonschema.validate(record, DR_SCHEMA)
+    assert record["autonomy_class"] == "human_review"
+    assert record["requires_human"] is True
 
 
 def test_escalates_on_coverage_gap_with_priority_reason():
@@ -317,7 +322,7 @@ def test_escalates_on_coverage_gap_with_priority_reason():
     situation, _plan = _coverage_gap_situation()
     outcome = REDUCER.reduce(situation)
     assert outcome["proposed_action"] is None
-    assert outcome["decision_record"]["confidence"] == 0.85  # above 0.5!
+    assert outcome["decision_record"]["confidence"] == 0.88  # above 0.5!
     assert outcome["escalation"]["reason"] == "coverage_gap"
 
 

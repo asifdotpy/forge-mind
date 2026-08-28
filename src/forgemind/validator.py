@@ -202,13 +202,20 @@ class CrossLifecycleValidator:
             for claim, domains in claim_domains.items()
             if len(domains) >= 2
         ]
+        # Multi-domain presence corroboration (ADR-011): when 2+ domains
+        # contribute findings, they count as corroborated even without
+        # overlapping claim text (the workers ran and reported). Computed
+        # BEFORE _assess_causality so multi-domain situations with causal
+        # language are classified instead of raising.
+        domain_count = len(set(f.get("domain") for f in findings if f.get("domain")))
+        corroborated = bool(supporting_evidence) or domain_count >= 2
         causality_status = self._assess_causality(
             findings,
-            corroborated=bool(supporting_evidence),
+            corroborated=corroborated,
         )
 
         confidences = [float(f["confidence"]) for f in findings]
-        confidence = min(confidences) if confidences else 0.0
+        confidence = round(sum(confidences) / len(confidences), 2) if confidences else 0.0
         weak_findings = [
             f["finding_id"]
             for f, c in zip(findings, confidences)

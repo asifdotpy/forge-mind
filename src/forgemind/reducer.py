@@ -14,13 +14,14 @@ threshold ladder:
                         (state machine: ``decision_ready -> escalated``
                         / ``closed_inconclusive``).
 - ``human_review``    — confidence below ``AUTONOMOUS_CONFIDENCE``
-                        (0.75), or causality not established
-                        (``correlated`` / ``unsupported``).  A
+                        (0.75), or causality ``unsupported``.  A
                         ``ProposedAction`` IS emitted but flagged
                         ``requires_human=True``.
-- ``safe_autonomous`` — confidence >= 0.75 AND causality ``supported``
-                        or ``verified`` AND zero conflicting evidence
-                        AND full coverage.  The action may proceed
+- ``safe_autonomous`` — confidence >= 0.75 AND causality ``correlated``,
+                        ``supported`` or ``verified`` (ADR-011: presence-
+                        based multi-domain corroboration counts as
+                        established) AND zero conflicting evidence AND
+                        full coverage.  The action may proceed
                         autonomously.
 
 Escalation ``reason`` precedence is deterministic: ``coverage_gap`` wins
@@ -67,7 +68,7 @@ ESCALATE_CONFIDENCE = 0.5
 DEFAULT_REQUIRED_HUMAN_ROLE = "engineering-on-call"
 
 #: Causality statuses counted as *established* for autonomous operation.
-_ESTABLISHED_CAUSALITY = ("supported", "verified")
+_ESTABLISHED_CAUSALITY = ("supported", "verified", "correlated")
 
 #: Canonical Escalation reason labels (contracts/escalation.schema.json).
 _ESCALATION_REASONS = (

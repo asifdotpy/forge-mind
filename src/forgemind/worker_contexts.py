@@ -60,13 +60,11 @@ def build_worker_contexts(event: dict, coverage_plan: dict) -> dict:
     for key, worker_name in _PAYLOAD_KEY_TO_WORKER.items():
         if worker_name not in selected_workers:
             continue
-        if key not in payload:
-            continue
         domain = WORKER_NAMES_BY_DOMAIN.get(worker_name)
         if domain is None:  # defensive: canonical map is authoritative
             continue
         contexts[worker_name] = {
             "domain": domain,
-            "inputs": {key: payload[key]},
+            "inputs": {key: payload[key]} if key in payload else {},
         }
     return contexts

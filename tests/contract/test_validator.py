@@ -117,10 +117,11 @@ def test_validated_situation_is_schema_valid():
 def test_causality_status_enum():
     allowed = {"unsupported", "correlated", "supported", "verified"}
     plan, findings = _pipeline_findings()
-    # FIXTURE-003 claims share no text and carry no causal language.
+    # FIXTURE-003 claims share no text and carry no causal language, but
+    # 3 domains contribute findings, so multi-domain correlation applies.
     pipeline_status = VALIDATOR.validate(plan, findings)["causality_status"]
     assert pipeline_status in allowed
-    assert pipeline_status == "unsupported"
+    assert pipeline_status == "correlated"
 
 
 def test_missing_domains_flagged_in_coverage():
@@ -189,7 +190,7 @@ def test_provenance_references_event_and_situation():
     assert validated["execution_trace_id"] == plan["execution_trace_id"]
 
 
-def test_confidence_is_minimum_of_findings():
+def test_confidence_is_average_of_findings():
     _event, _dispatch, plan = _plan_and_dispatch("FIXTURE-002-escalation.json")
     findings = [
         _finding(plan, "code", ["code claim"], confidence=0.9),
@@ -197,7 +198,7 @@ def test_confidence_is_minimum_of_findings():
         _finding(plan, "production", ["production claim"], confidence=0.75),
     ]
     validated = VALIDATOR.validate(plan, findings)
-    assert validated["confidence"] == 0.68
+    assert validated["confidence"] == 0.78
 
 
 def test_empty_findings_emit_conservative_valid_situation():

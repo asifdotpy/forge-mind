@@ -102,6 +102,19 @@ def test_adk_deterministic_path_matches():
     expected = run_pipeline(body)
     actual = run_adk_pipeline(body)
 
+    # Normalise shard ORDER for comparison: the two runtimes assemble the
+    # same shard SET in different order (worker collection order differs),
+    # and validated_situation.evidence_ids follows shard order. Rebuild
+    # m3_proof after sorting so the derived artifact_chain matches too.
+    from forgemind.m3_proof import build_m3_proof
+    for r in (expected, actual):
+        r["artifacts"]["evidence_shards"] = sorted(
+            r["artifacts"]["evidence_shards"], key=lambda s: s["evidence_shard_id"]
+        )
+        vs = r["artifacts"]["validated_situation"]
+        vs["evidence_ids"] = sorted(vs.get("evidence_ids") or [])
+        r["m3_proof"] = build_m3_proof(r)
+
     # Byte-identical artifacts + terminal for the non-pausing (allowed) path.
     assert expected == actual
     assert actual["status"] == "ok"

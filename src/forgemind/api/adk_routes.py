@@ -462,8 +462,15 @@ def register_adk_routes(app: FastAPI) -> None:
                 "reference": pr.get("html_url", ""),
                 "affected_entities": [repo],
                 "provenance": {"source_system": "github", "sender": body.get("sender", {}).get("login", "")},
-                "selected_domains": ["code"],
-                "selected_workers": ["pr-pre-flight-ast-worker"],
+                "selected_domains": ["code", "delivery", "production"],
+                "selected_workers": [
+                    "pr-pre-flight-ast-worker",
+                    "docs-drift-and-spec-worker",
+                    "build-log-and-flakiness-worker",
+                    "alert-storm-clustering-worker",
+                    "telemetry-correlation-worker",
+                    "security-and-dependency-worker",
+                ],
                 "require_human_above_risk_level": "critical",
                 "max_concurrent_managers": 3,
                 "global_timeout_seconds": 300,
@@ -472,6 +479,11 @@ def register_adk_routes(app: FastAPI) -> None:
                     "pr_number": pr["number"],
                     "repo": repo,
                     "sha": pr.get("head", {}).get("sha", ""),
+                    # Acquisition contract (acquisition._select_domains):
+                    # payload.affected_domains is the ONLY channel the
+                    # Supervisor honours for multi-domain selection — the
+                    # event-level selected_domains key is display-only.
+                    "affected_domains": ["code", "delivery", "production"],
                 },
             }
             
