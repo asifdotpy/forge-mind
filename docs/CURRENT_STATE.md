@@ -1,8 +1,8 @@
 # Current State — ForgeMind v3.0
 
-**Date**: 2026-08-26  
-**Phase**: Phase 6 COMPLETE — M3 Judge-visible surface (SPEC-001 Milestone 3)  
-**Status**: M3 COMPLETE (2026-08-25) — judge-visible surface shipped (M3-A viewer + M3-B Gemini/ADK); M1 local + M2 cloud + M3 judge surface COMPLETE; SPEC-001 Definition-of-Done achieved  
+**Date**: 2026-08-28
+**Phase**: Phase 4 (SPEC-002) COMPLETE — acceptance test passes; ADR-012 authored; docs/status hygiene done
+**Status**: SPEC-001 COMPLETE (M1/M2/M3 done) · SPEC-002 Phase 0 (deploy) + Phase 4 (acceptance test) + Phase 5 (demo) complete; Phase 1–3 in progress (connector/CI/CD/secrets) · 231 passed, 1 skipped (live-token-gated) + 5 acceptance tests green
 **Branch**: `main` → `origin/main` (github.com/asifdotpy/forge-mind, public)
 
 ---
@@ -14,7 +14,7 @@ ForgeMind v3.0 Phase 6 (Tier 5 Decision Reducer + Action Validation + Escalation
 - All 9 canonical JSON Schema contracts authored and validated
 - 6 fixtures with expected assertions authored and passing
 - `src/forgemind/` package importable
-- `pytest tests/` green (144/144 — 5 contract baseline + 19 Phase 1 + 18 Phase 2 + 15 Phase 3 + 18 Phase 4 + 15 Phase 5 + 23 Phase 6 + 7 ADR-009 boundary + 6 M3-A surface + 8 M3-B ADK + 4 integration + 6 secret-handling) *(+3: `/adk/events` real-DAG parity + conservative event-only guard + webhook action dispatch, 2026-08-27)*
+- `pytest tests/` green (231 passed, 1 skipped — live-token-gated)
 - Phase 1 acquisition module (`src/forgemind/acquisition.py`) implements deterministic `Event → CoveragePlan` lineage prefix
 - Phase 2 supervisor module (`src/forgemind/supervisor.py`) implements `Event → CoveragePlan → SupervisorDispatch` trace with global constraint enforcement
 - Phase 3 domain managers (`src/forgemind/domain_managers.py`) implement bounded-domain aggregation: `Event → CoveragePlan → SupervisorDispatch → DomainFinding`
@@ -257,13 +257,13 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 
 ## 6. Verification Results
 
-### 6.1 Test Suite (latest run — 2026-08-24, post-ADR-009)
+### 6.1 Test Suite (latest run — 2026-08-28)
 
 ```
 $ .venv/bin/python -m pytest tests/ -q
 ........................................................................ [ 51%]
 .....................................................................    [100%]
-141 passed in 18.03s
+231 passed, 1 skipped in 18.68s
 ```
 
 | Suite | Tests |
@@ -277,12 +277,15 @@ $ .venv/bin/python -m pytest tests/ -q
 | `tests/contract/test_reducer.py` | 23 (Phase 6) |
 | `tests/contract/test_runtime_boundary.py` | 7 (ADR-009 boundary) |
 | `tests/contract/test_m3_surface.py` | 6 (M3-A) |
-| `tests/contract/test_m3b_adk.py` | 5 (M3-B ADK) |
+| `tests/contract/test_m3b_adk.py` | 8 (M3-B ADK) |
+| `tests/contract/test_evidence_aware_decisioning.py` | 39 (ADR-011) |
+| `tests/contract/test_adversarial_evaluation.py` | 14 (ADR-011) |
 | `tests/integration/test_fixture_run.py` | 4 |
 | `tests/test_secret_handling.py` | 6 (FAIL-003 guard) |
-| **Total** | **141** |
+| `tests/test_env_loader.py` | 8 (dotenv loader) |
+| **Total** | **231** |
 
-**Baseline history**: 90 (Phases 1–4) → 128 (Phases 5–6) → 132 (+4 ADR-009 boundary) → **127** (−5 after removing `tests/test_knowledge_brain.py`) → **141** (+6 M3-A surface, +5 M3-B ADK, +3 boundary-growth — `test_runtime_boundary` gained `llm`/`adk_runtime`/`worker_contexts` import guards).
+**Baseline history**: 90 → 128 → 132 → 127 → 141 → 144 → 152 → 191 (+39 ADR-011 evidence-aware) → 231 (+14 adversarial eval + 8 env loader + 18 misc growth).
 
 **Every remaining test is independent of the local Knowledge Brain**: the suite runs on a bare clone with no `chromadb` installed and no `NOTION_TOKEN` set.
 
@@ -481,4 +484,6 @@ Per `spec.md` Stop Condition:
 *Updated: paused-projection fix (`5cafb6a`) + LIVE end-to-end demo — paused workflows now surface the reducer's decision (`autonomy_class='human_review'`, `state='human_review_required'`, `actions_taken=['analysis_comment_posted']`) instead of null/'escalated'; `m3_proof` reads top-level `decision_record`/`action_validation` when `terminal` is absent. Cloud Run (`forgemind-v3-prod`, revision `forgemind-00025-wcr`) now runs `FORGEMIND_RUNTIME=adk` (suite verified 152/152 with it — the T905 gate) so `POST /api/v1/approvals/{token}` resumes workflows created by the ADK webhook (previously 404: webhook created pauses unconditionally but resume was runtime-gated). Token rotated to a fine-grained PAT covering `TheVertexAgents/vertex-sentinel`. LIVE verification on real PRs: webhook fires posted genuine ForgeMind analysis comments on #204, #125, #124 (human_review path; no status checks — correct, single-domain evidence stays conservative), approve loop returned 200 with `human_decision=approve` and a published escalation terminal (gate verdict stands by design — post-approval action execution not yet wired). Comment confidence now rounded to 2 decimals. Verified: 152/152 pytest with and without `FORGEMIND_RUNTIME=adk` — 2026-08-28*
 
 *Updated: deploy pipeline fix — `COMMIT_SHA` (Cloud Build built-in) is empty for manual `gcloud builds submit`, which produced an invalid untagged image name (`forgemind:`) and aborted deploys; replaced with a custom `_COMMIT_SHA` substitution (default `manual-build`, overridden by `deploy/deploy.sh` with `git rev-parse --short HEAD`). Final live revision `forgemind-00026-dtf` (image tagged with the real short sha), health ok, live `/adk/events` check confirms rounded confidence rendering — 2026-08-28*
+
+*Updated: Phases 1+2 (docs/status hygiene + SPEC-002 completion) — refreshed CURRENT_STATE.md header to 2026-08-28 and §6.1 test table to 231+1; fixed stale test counts across SUBMISSION/*.md, README.md, docs/PROJECT.md, ADR-011; added ADR-010/011 rows to docs/decisions/README.md; checked off all 10 acceptance criteria in specs/001-hierarchical-runtime-dag/spec.md; flipped T025 tracker in tasks.md; aligned .env.example (FORGEMIND_RUNTIME=adk + FORGEMIND_ADK_MODEL); authored specs/002-realworld-deployment/tasks.md; implemented tests/acceptance/test_real_value.py (5 tests, all passing — SPEC-002 Phase 4 gate satisfied); authored ADR-012-realworld-deployment-surroundings.md (candidate status, honest implemented-vs-deferred table) — 2026-08-28*
 

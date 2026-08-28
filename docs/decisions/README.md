@@ -15,6 +15,9 @@ ADRs document significant architectural, technical, and structural decisions mad
 | [**ADR-007**](file:///home/asif1/forge-mind/docs/decisions/ADR-007-dag-and-leaf-worker-constraints.md) | Enforce DAG Invariants and Leaf-Worker Constraints | Amended (2026-08-24) | Leaf workers cannot spawn sub-agents; no cycles; lineage via schema-required provenance, `TRC-*` root trace where contracted; distributed tracing via OTel in Phase 10 |
 | [**ADR-008**](file:///home/asif1/forge-mind/docs/decisions/ADR-008-adk-2-workflow-runtime.md) | Adopt Google ADK 2 as the ForgeMind Workflow Runtime | Accepted | ADK 2 deterministic orchestration & human gates |
 | [**ADR-009**](file:///home/asif1/forge-mind/docs/decisions/ADR-009-chromadb-development-time-boundary.md) | ChromaDB Is a Development-Time Derived Index | Accepted | Dev-time Knowledge Brain; never runtime state |
+| [**ADR-010**](file:///home/asif1/forge-mind/docs/decisions/ADR-010-m3-ai-core-scope.md) | M3 AI Core Scope — Real Gemini 3.5 via Vertex AI inside bounded ADK 2 nodes | Accepted | Bounded Gemini 3.5 + ADK 2 workflow runtime |
+| [**ADR-011**](file:///home/asif1/forge-mind/docs/decisions/ADR-011-evidence-aware-decisioning.md) | Evidence-Aware Autonomous Decisioning | Accepted | No confidence upgrade on evidence state; risk-adaptive confidence |
+| [**ADR-012**](file:///home/asif1/forge-mind/docs/decisions/ADR-012-realworld-deployment-surroundings.md) | Real-World Deployment Surroundings (Connector Layer, CI/CD, Secret Manager) | Candidate (2026-08-28) | Connector isolation, auto-deploy, secret zero-trust |
 
 ## ADR Template
 ```markdown

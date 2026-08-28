@@ -110,16 +110,16 @@ Event
 
 ## Acceptance Criteria
 
-- [ ] Every investigation has one stable `situation_id`.
-- [ ] Every derived artifact retains provenance and upstream references.
-- [ ] Workers provide bounded evidence and cannot determine final decisions.
-- [ ] Domain Managers may aggregate only within their bounded domain.
-- [ ] Only the Cross-Lifecycle Validator creates a `ValidatedSituation`.
-- [ ] Only the Decision Reducer converts a validated situation into an operational decision.
-- [ ] Confidence is not proof; uncertainty remains explicit.
-- [ ] Correlation is never represented as confirmed causation without supporting evidence.
-- [ ] Every proposed action passes the Action Validation boundary.
-- [ ] High-uncertainty or insufficiently supported actions produce escalation.
+- [x] Every investigation has one stable `situation_id`.
+- [x] Every derived artifact retains provenance and upstream references.
+- [x] Workers provide bounded evidence and cannot determine final decisions.
+- [x] Domain Managers may aggregate only within their bounded domain.
+- [x] Only the Cross-Lifecycle Validator creates a `ValidatedSituation`.
+- [x] Only the Decision Reducer converts a validated situation into an operational decision.
+- [x] Confidence is not proof; uncertainty remains explicit.
+- [x] Correlation is never represented as confirmed causation without supporting evidence.
+- [x] Every proposed action passes the Action Validation boundary.
+- [x] High-uncertainty or insufficiently supported actions produce escalation.
 
 ## Success Criteria
 

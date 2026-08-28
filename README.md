@@ -2,7 +2,7 @@
 
 > **ForgeMind is an autonomous engineering control plane where specialized agents share context, understand relationships across the software lifecycle, reduce operational friction, and know when to act — and when to ask a human.**
 
-**Status:** 🟢 SPEC-001 Complete — Five-Tier Runtime + M3 Judge Surface Implemented (Phases 1-6, M1/M2/M3 done, 140 tests green, real Gemini 3.5 via Vertex AI + ADK 2)
+**Status:** 🟢 SPEC-001 Complete — Five-Tier Runtime + M3 Judge Surface Implemented (Phases 1-6, M1/M2/M3 done, 231 passed + 1 skipped, real Gemini 3.5 via Vertex AI + ADK 2)
 
 ## What ForgeMind Is
 

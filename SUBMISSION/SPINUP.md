@@ -13,7 +13,7 @@ Cloud, satisfying the hackathon "reproducible setup" requirement.
 git clone https://github.com/asifdotpy/forge-mind.git
 cd forge-mind
 uv sync                      # installs runtime + dev deps (incl. google-genai)
-uv run pytest tests/         # 140 passed (133 baseline + M3-A + M3-B)
+uv run pytest tests/         # 231 passed, 1 skipped (live-token-gated)
 
 # Black-box fixture run (all 7 fixtures, 0 errors)
 PYTHONPATH=src uv run python scripts/run_fixture.py
@@ -38,7 +38,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/events \
 # response includes m3_proof + (with creds) Gemini-backed worker observations
 ```
 - `FORGEMIND_RUNTIME` unset or `deterministic` → existing deterministic
-  pipeline (133 tests stay green, no GenAI import at runtime).
+  pipeline (231 tests stay green, no GenAI import at runtime).
 - Only `FORGEMIND_RUNTIME=adk` activates the ADK workflow + human-approval gate.
 
 ## 3. Deploy to Google Cloud (M2 — Cloud Run)

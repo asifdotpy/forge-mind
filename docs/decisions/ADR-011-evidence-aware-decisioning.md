@@ -119,7 +119,7 @@ Both block autonomous action but produce different diagnostic outputs.
 
 - 39 dedicated contract tests in `tests/contract/test_evidence_aware_decisioning.py` cover all evidence-aware mechanisms
 - PR #204 (dependabot, 3 files, no CI/security data) now resolves to `human_review` instead of `safe_autonomous` — this is the canonical regression test
-- All 191 tests pass (152 original + 39 new)
+- All 231 tests pass (1 skipped live-token-gated)
 - Live webhook verification: `selected_domains: ['code', 'delivery', 'production']`, `shards: 6`, `causality: correlated`, `autonomy: human_review`, `actions_taken: ['analysis_comment_posted']`
 
 ## Relationship to other ADRs

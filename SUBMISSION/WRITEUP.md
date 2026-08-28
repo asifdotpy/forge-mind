@@ -43,7 +43,7 @@ high-blast-radius ones to a human.
 
 ## Findings & learnings
 - **Bounded LLM scope beats an LLM-everywhere design.** Confining Gemini to one
-  worker node kept the deterministic 133-test suite green and preserved the
+  worker node kept the deterministic 231-test suite green and preserved the
   architectural invariants judges reward (Architectural Discipline pillar).
 - **Provenance is a feature, not overhead.** Carrying `execution_trace_id` and
   upstream refs through every artifact made the "human control" story trivially
