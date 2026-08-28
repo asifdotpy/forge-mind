@@ -79,6 +79,38 @@ _ESCALATION_REASONS = (
     "validation_failure",
 )
 
+#: Risk-adaptive confidence strategy (Fix 4).
+#: Different risk levels use different confidence aggregation strategies:
+#: - low: evidence-weighted (average with evidence strength bonus)
+#: - medium: conservative weighted (min of average and evidence-weighted)
+#: - high: weakest-link (min confidence across findings)
+#: - critical: human approval required (no autonomous action)
+RISK_CONFIDENCE_STRATEGY = {
+    "low": "evidence_weighted",
+    "medium": "conservative_weighted",
+    "high": "weakest_link",
+    "critical": "human_required",
+}
+
+#: Action-risk-dependent evidence threshold (Fix 3).
+#: Maps proposed action types to required evidence domains.
+#: Each action type requires evidence from specific domains to proceed.
+ACTION_REQUIRED_DOMAINS = {
+    "post_comment": ["code", "delivery"],
+    "auto_merge": ["code", "delivery", "production"],
+    "production_remediation": ["code", "delivery", "production"],
+    "status_check": ["code", "delivery"],
+    "analysis_comment": ["code"],
+}
+
+#: Minimum evidence strength required per risk level (Fix 3).
+RISK_EVIDENCE_THRESHOLD = {
+    "low": 0.33,
+    "medium": 0.5,
+    "high": 0.67,
+    "critical": 1.0,
+}
+
 
 class ReducerError(ValueError):
     """Tier 5 decision-policy failure.
@@ -158,14 +190,57 @@ class DecisionReducer:
         missing_domains = list(coverage.get("missing_domains") or [])
         provided_count = len(coverage.get("provided_domains") or [])
 
-        # -- evidence-quality confidence boost ----------------------------------
-        # Reward well-evidenced situations: full coverage (no missing domains)
-        # AND established causality gets a small boost before the ladder check.
-        # The raw confidence is preserved in the decision record for auditability.
+        # -- evidence-aware fields from validator (Fix 2, 3, 4) --------------
+        evidence_strength = float(situation.get("evidence_strength", 0.0))
+        evidence_states = situation.get("evidence_states", {}) or {}
+        cross_worker_consistency = (
+            situation.get("cross_worker_consistency", {}) or {}
+        )
+        claim_statuses = situation.get("claim_statuses", {}) or {}
+
+        # -- base confidence boost (preserves old behavior) ----------------
+        # Reward well-evidenced situations: full coverage + established causality
         if not missing_domains and causality_status in _ESTABLISHED_CAUSALITY:
-            confidence = confidence_raw + 0.05
+            base_confidence = confidence_raw + 0.05
         else:
-            confidence = confidence_raw
+            base_confidence = confidence_raw
+
+        # -- deterministic risk classification (Fix 4) ----------------------
+        # Use base confidence for initial risk assessment
+        if conflicts or base_confidence < ESCALATE_CONFIDENCE:
+            risk_level = "high"
+        elif (
+            base_confidence < AUTONOMOUS_CONFIDENCE
+            or causality_status not in _ESTABLISHED_CAUSALITY
+        ):
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+
+        # Check for high/critical credible findings (Fix 5)
+        has_high_critical_evidence = self._has_high_critical_evidence(
+            evidence_states, claim_statuses
+        )
+        if has_high_critical_evidence and risk_level in ("low", "medium"):
+            risk_level = "high"
+
+        # -- risk-adaptive confidence strategy (Fix 4) ----------------------
+        confidence = self._apply_confidence_strategy(
+            confidence_raw=confidence_raw,
+            evidence_strength=evidence_strength,
+            risk_level=risk_level,
+            causality_status=causality_status,
+            missing_domains=missing_domains,
+        )
+
+        # -- action-risk-dependent evidence threshold (Fix 3) ---------------
+        # Check if evidence is adequate for the proposed action
+        evidence_adequate = self._check_evidence_adequacy(
+            evidence_strength=evidence_strength,
+            risk_level=risk_level,
+            provided_domains=coverage.get("provided_domains", []),
+            missing_domains=missing_domains,
+        )
 
         # -- deterministic policy ladder -----------------------------------
         escalate_triggers = []
@@ -184,6 +259,13 @@ class DecisionReducer:
                 f"{len(conflicts)} unresolved cross-domain conflict(s)"
             )
 
+        # Cross-worker contradictions trigger escalation
+        if cross_worker_consistency.get("contradictions"):
+            escalate_triggers.append(
+                "cross-worker contradictions: "
+                + "; ".join(cross_worker_consistency["contradictions"])
+            )
+
         if escalate_triggers:
             autonomy_class = "escalate"
             reason = "coverage_gap" if missing_domains else "uncertainty"
@@ -193,22 +275,19 @@ class DecisionReducer:
         ):
             autonomy_class = "human_review"
             reason = None
+        elif not evidence_adequate:
+            # Evidence strength insufficient for proposed action (Fix 3)
+            autonomy_class = "human_review"
+            reason = None
+        elif has_high_critical_evidence:
+            # High/critical credible findings cannot be averaged away (Fix 5)
+            autonomy_class = "escalate"
+            reason = "risk"
         else:
             autonomy_class = "safe_autonomous"
             reason = None
 
         requires_human = autonomy_class != "safe_autonomous"
-
-        # -- deterministic risk classification ------------------------------
-        if conflicts or confidence < ESCALATE_CONFIDENCE:
-            risk_level = "high"
-        elif (
-            confidence < AUTONOMOUS_CONFIDENCE
-            or causality_status not in _ESTABLISHED_CAUSALITY
-        ):
-            risk_level = "medium"
-        else:
-            risk_level = "low"
 
         suffix = _id_suffix(situation["situation_id"])
         record = {
@@ -424,3 +503,125 @@ class DecisionReducer:
             "required_human_role": DEFAULT_REQUIRED_HUMAN_ROLE,
             "evidence_ids": list(situation.get("evidence_ids") or []),
         }
+
+    # -- evidence-aware decisioning helpers (Fix 3, 4, 5) -----------------------
+
+    @staticmethod
+    def _has_high_critical_evidence(
+        evidence_states: dict, claim_statuses: dict
+    ) -> bool:
+        """Check if there is high/critical risk evidence with supporting credibility.
+
+        Fix 5: High/critical credible findings cannot be averaged away.
+        A finding is credible if it has SUPPORTED or INDEPENDENTLY_VERIFIED claims.
+        """
+        # Check for contradictory evidence (always escalates)
+        counts = evidence_states.get("counts", {}) if evidence_states else {}
+        if counts.get("contradictory", 0) > 0:
+            return True
+
+        # Check if any claims are independently verified with high-risk signals
+        verified_claims = [
+            claim
+            for claim, status in claim_statuses.items()
+            if status
+            in ("supported", "independently_verified", "verified")
+        ]
+        # If we have verified claims AND evidence strength is meaningful,
+        # the finding is credible
+        if verified_claims and counts.get("observed", 0) > 0:
+            # Check for high-risk keywords in verified claims
+            high_risk_keywords = (
+                "vulnerability",
+                "injection",
+                "auth bypass",
+                "xss",
+                "csrf",
+                "rce",
+                "privilege escalation",
+                "hardcoded",
+                "secret",
+                "token leakage",
+                "critical",
+            )
+            for claim in verified_claims:
+                lowered = claim.lower()
+                if any(kw in lowered for kw in high_risk_keywords):
+                    return True
+        return False
+
+    @staticmethod
+    def _apply_confidence_strategy(
+        confidence_raw: float,
+        evidence_strength: float,
+        risk_level: str,
+        causality_status: str,
+        missing_domains: list,
+    ) -> float:
+        """Apply risk-adaptive confidence strategy (Fix 4).
+
+        | Risk Level | Confidence Strategy     |
+        |------------|-------------------------|
+        | Low        | Evidence-weighted       |
+        | Medium     | Conservative weighted   |
+        | High       | Weakest-link (min)      |
+        | Critical   | Human approval required |
+        """
+        strategy = RISK_CONFIDENCE_STRATEGY.get(
+            risk_level, "evidence_weighted"
+        )
+
+        if strategy == "human_required":
+            # Critical: force below autonomous threshold
+            return min(confidence_raw, AUTONOMOUS_CONFIDENCE - 0.01)
+
+        # Base boost for well-evidenced situations
+        if not missing_domains and causality_status in _ESTABLISHED_CAUSALITY:
+            boosted = confidence_raw + 0.05
+        else:
+            boosted = confidence_raw
+
+        if strategy == "evidence_weighted":
+            # Evidence-weighted: reward high evidence strength
+            # Scale: confidence * (0.7 + 0.3 * evidence_strength)
+            return round(
+                min(1.0, boosted * (0.7 + 0.3 * evidence_strength)), 2
+            )
+
+        if strategy == "conservative_weighted":
+            # Conservative weighted: min of boosted and evidence-weighted
+            evidence_weighted = min(
+                1.0, boosted * (0.7 + 0.3 * evidence_strength)
+            )
+            return round(min(boosted, evidence_weighted), 2)
+
+        if strategy == "weakest_link":
+            # Weakest-link: use the minimum of raw confidence and evidence
+            # strength (high risk situations require strong evidence)
+            return round(min(confidence_raw, evidence_strength), 2)
+
+        return round(boosted, 2)
+
+    @staticmethod
+    def _check_evidence_adequacy(
+        evidence_strength: float,
+        risk_level: str,
+        provided_domains: list,
+        missing_domains: list,
+    ) -> bool:
+        """Check if evidence is adequate for the proposed action (Fix 3).
+
+        Autonomy requires BOTH:
+        - confidence_score >= threshold
+        - evidence_strength >= threshold
+
+        Different risk levels have different evidence thresholds.
+        """
+        # Missing domains always means inadequate evidence
+        if missing_domains:
+            return False
+
+        # Get minimum evidence strength threshold for this risk level
+        threshold = RISK_EVIDENCE_THRESHOLD.get(risk_level, 0.33)
+
+        return evidence_strength >= threshold

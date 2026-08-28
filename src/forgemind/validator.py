@@ -3,7 +3,7 @@
 The sole tier authorized to reconcile evidence across domain boundaries
 (docs/ARCHITECTURE.md, ADR-005).  The validator accepts the ``CoveragePlan``
 that selected the domains, every ``DomainFinding`` contributed by the Tier 2
-managers, and (optionally) raw ``EvidenceShard``\\s; verifies coverage;
+managers, and (optional) raw ``EvidenceShard``\\s; verifies coverage;
 reconciles supporting and conflicting evidence; deduplicates repeated
 signals; distinguishes correlation from causation; and emits a single
 schema-valid ``ValidatedSituation`` — the authoritative input for Tier 5
@@ -34,6 +34,10 @@ Tier 4 responsibilities implemented:
 6. **Confidence** --- weakest link wins: the aggregate confidence is the
    minimum across contributing findings (``0.0`` with no findings), and any
    sub-``0.5`` finding contributes an explicit uncertainty.
+7. **Evidence-aware decisioning** --- evidence quality is modeled explicitly
+   via :class:`EvidenceState` and :class:`ClaimStatus`.  Cross-worker
+   consistency is checked, evidence strength is computed as a separate
+   dimension from confidence, and claim provenance is verified.
 
 Boundaries (violations are architectural bugs): the validator reconciles
 across domains but NEVER decides policy, NEVER emits DecisionRecord /
@@ -49,13 +53,19 @@ ValidatedSituations (replay-stable).  The validator is stateless ---
 
 from __future__ import annotations
 
+from enum import Enum
 from typing import Iterable, Optional
 
 import jsonschema
 
 from forgemind.acquisition import load_schema
 
-__all__ = ["CrossLifecycleValidator", "ValidatorError"]
+__all__ = [
+    "ClaimStatus",
+    "CrossLifecycleValidator",
+    "EvidenceState",
+    "ValidatorError",
+]
 
 #: Negation prefixes — the same conservative heuristic as Phase 3
 #: (``forgemind.domain_managers``).  Only a verbatim leading prefix marks a
@@ -75,6 +85,28 @@ _FORBIDDEN_DECISION_KEYS = (
     "action_validation_id",
     "escalation_id",
 )
+
+
+class EvidenceState(str, Enum):
+    """Evidence quality classification for claims and observations.
+
+    Architecture rule: **No confidence score can upgrade an evidence state.**
+    ``NO_SIGNAL + confidence=0.99 ≠ OBSERVED + confidence=0.99``
+    """
+
+    OBSERVED = "observed"           # Concrete evidence found
+    VERIFIED = "verified"           # Independently confirmed
+    NO_SIGNAL = "no_signal"         # Worker looked, found nothing
+    UNAVAILABLE = "unavailable"     # Worker could not obtain evidence
+    CONTRADICTORY = "contradictory" # Conflicts with another observation
+
+
+class ClaimStatus(str, Enum):
+    """Provenance verification status for claims."""
+
+    UNVERIFIED = "unverified"         # Worker claim only
+    SUPPORTED = "supported"             # Corroborated by another worker
+    INDEPENDENTLY_VERIFIED = "independently_verified"  # Verified against system of record
 
 
 class ValidatorError(ValueError):
@@ -230,6 +262,16 @@ class CrossLifecycleValidator:
                 f"({', '.join(weak_findings)}); treat conclusions conservatively"
             )
 
+        # -- evidence-aware decisioning (Fix 1, 2, 6) --------------------
+        # Cross-worker consistency: detect contradictions and coverage gaps
+        cross_worker_consistency = self._cross_worker_consistency(findings)
+        # Evidence strength: separate dimension from confidence
+        evidence_strength = self._compute_evidence_strength(findings, shards)
+        # Claim provenance: verify claims against systems of record
+        claim_statuses = self._verify_claim_provenance(findings)
+        # Aggregate evidence states for the situation
+        evidence_states = self._aggregate_evidence_states(findings, shards)
+
         coverage_percentage = (
             round(100.0 * len(provided_domains) / len(selected_domains))
             if selected_domains
@@ -263,6 +305,21 @@ class CrossLifecycleValidator:
                 f"weakest-link confidence {confidence} driven by "
                 f"{weak_findings}."
             )
+        # Evidence-aware notes
+        validation_notes.append(
+            f"evidence_strength={evidence_strength:.2f} "
+            f"({evidence_states.get('summary', 'no evidence states recorded')})"
+        )
+        if cross_worker_consistency.get("contradictions"):
+            validation_notes.append(
+                f"cross-worker contradictions detected: "
+                f"{cross_worker_consistency['contradictions']}"
+            )
+        if cross_worker_consistency.get("coverage_gaps"):
+            validation_notes.append(
+                f"cross-worker coverage gaps: "
+                f"{cross_worker_consistency['coverage_gaps']}"
+            )
 
         validated = {
             "validated_situation_id": (
@@ -279,6 +336,10 @@ class CrossLifecycleValidator:
             "correlations": correlations,
             "causality_status": causality_status,
             "confidence": confidence,
+            "evidence_strength": round(evidence_strength, 2),
+            "evidence_states": evidence_states,
+            "claim_statuses": claim_statuses,
+            "cross_worker_consistency": cross_worker_consistency,
             "uncertainties": uncertainties,
             "validation_notes": validation_notes,
             "provenance": {
@@ -513,3 +574,395 @@ class CrossLifecycleValidator:
             ),
             "unsupported": "no cross-domain signal to assess causation",
         }.get(status, "heuristic")
+
+    # -- evidence-aware decisioning (Fix 1, 2, 6) -------------------------------
+
+    @staticmethod
+    def _extract_structured_claims(findings: list, shards: list) -> list:
+        """Extract structured claims with evidence state from findings and shards.
+
+        Each claim is a dict with: claim, value, evidence, source, evidence_state.
+        Claims from findings use the finding's domain and claims list.
+        Claims from shards use the shard's structured claims if present.
+        """
+        structured = []
+        for finding in findings:
+            domain = finding.get("domain", "unknown")
+            for claim_text in finding.get("supported_claims", []):
+                # Determine evidence state: if the claim has evidence, it's OBSERVED
+                evidence_state = EvidenceState.OBSERVED.value
+                # Check if this is a "no signal" type claim
+                lowered = claim_text.lower()
+                if any(
+                    phrase in lowered
+                    for phrase in (
+                        "no ",
+                        "no signal",
+                        "nothing found",
+                        "no evidence",
+                        "no claim",
+                        "no dependency",
+                        "no doc",
+                        "no alert",
+                        "no telemetry",
+                        "no changed",
+                        "no build",
+                    )
+                ):
+                    evidence_state = EvidenceState.NO_SIGNAL.value
+                structured.append(
+                    {
+                        "claim": claim_text,
+                        "value": True,
+                        "evidence": [finding.get("finding_id", "unknown")],
+                        "source": f"domain_finding:{domain}",
+                        "evidence_state": evidence_state,
+                        "domain": domain,
+                    }
+                )
+        for shard in shards:
+            domain = shard.get("domain", "unknown")
+            worker = shard.get("worker", "unknown")
+            # Use structured claims from shard if present
+            for claim in shard.get("claims", []):
+                if isinstance(claim, dict):
+                    structured.append(
+                        {
+                            "claim": claim.get("claim", ""),
+                            "value": claim.get("value", True),
+                            "evidence": claim.get("evidence", []),
+                            "source": claim.get("source", f"shard:{worker}"),
+                            "evidence_state": claim.get(
+                                "evidence_state", EvidenceState.OBSERVED.value
+                            ),
+                            "domain": domain,
+                        }
+                    )
+                else:
+                    # String claim from shard
+                    evidence_state = EvidenceState.OBSERVED.value
+                    lowered = str(claim).lower()
+                    if any(
+                        phrase in lowered
+                        for phrase in (
+                            "no ",
+                            "no signal",
+                            "nothing found",
+                            "no evidence",
+                            "no claim",
+                            "no dependency",
+                            "no doc",
+                            "no alert",
+                            "no telemetry",
+                            "no changed",
+                            "no build",
+                        )
+                    ):
+                        evidence_state = EvidenceState.NO_SIGNAL.value
+                    structured.append(
+                        {
+                            "claim": str(claim),
+                            "value": True,
+                            "evidence": [shard.get("evidence_shard_id", "unknown")],
+                            "source": f"shard:{worker}",
+                            "evidence_state": evidence_state,
+                            "domain": domain,
+                        }
+                    )
+        return structured
+
+    def _cross_worker_consistency(self, findings: list) -> dict:
+        """Check cross-worker consistency (Fix 1).
+
+        Detects:
+        - Contradictions: two workers with conflicting claims
+        - Coverage gaps: expected evidence missing (e.g., CI unknown but PR
+          touches .github/workflows/*)
+
+        Returns dict with ``contradictions`` and ``coverage_gaps`` lists.
+        """
+        contradictions = []
+        coverage_gaps = []
+
+        # Build claim index: claim_text -> list of (domain, finding_id)
+        claim_index: dict = {}
+        for finding in findings:
+            domain = finding.get("domain", "unknown")
+            for claim_text in finding.get("supported_claims", []):
+                claim_index.setdefault(claim_text, []).append(
+                    (domain, finding.get("finding_id", "unknown"))
+                )
+
+        # Check for negation-based contradictions across domains
+        all_positives = {}
+        all_negations = {}
+        for finding in findings:
+            domain = finding.get("domain", "unknown")
+            for claim_text in finding.get("supported_claims", []):
+                lowered = claim_text.strip().lower()
+                negated_key, _ = _negation_pair(lowered)
+                if negated_key is None:
+                    all_positives.setdefault(domain, []).append(lowered)
+                else:
+                    all_negations.setdefault(domain, []).append(negated_key)
+
+        for neg_domain, neg_keys in all_negations.items():
+            for neg_key in neg_keys:
+                for pos_domain, pos_keys in all_positives.items():
+                    if pos_domain == neg_domain:
+                        continue
+                    if neg_key in pos_keys:
+                        contradictions.append(
+                            f"'{neg_key}' asserted in {pos_domain} "
+                            f"but negated in {neg_domain}"
+                        )
+
+        # Check for evidence gaps: if code domain has dependency changes
+        # but security domain has no scan results
+        code_claims = []
+        security_claims = []
+        for finding in findings:
+            domain = finding.get("domain")
+            if domain == "code":
+                code_claims.extend(finding.get("supported_claims", []))
+            elif domain == "production":
+                security_claims.extend(finding.get("supported_claims", []))
+
+        # If code worker reports dependency file changes, security should have
+        # run a dependency scan
+        code_text = " ".join(code_claims).lower()
+        security_text = " ".join(security_claims).lower()
+        if (
+            "package.json" in code_text
+            or "dependency" in code_text
+            or "requirements.txt" in code_text
+        ):
+            if "scan" not in security_text and "dependency" not in security_text:
+                coverage_gaps.append(
+                    "code domain reports dependency changes but production "
+                    "domain has no dependency scan evidence"
+                )
+
+        # If PR touches .github/workflows/*, build worker should have CI data
+        if ".github/workflows" in code_text:
+            delivery_claims = []
+            for finding in findings:
+                if finding.get("domain") == "delivery":
+                    delivery_claims.extend(finding.get("supported_claims", []))
+            delivery_text = " ".join(delivery_claims).lower()
+            if "ci" not in delivery_text and "build" not in delivery_text:
+                coverage_gaps.append(
+                    "code domain reports workflow changes but delivery "
+                    "domain has no CI/build evidence"
+                )
+
+        return {
+            "contradictions": contradictions,
+            "coverage_gaps": coverage_gaps,
+            "is_consistent": not contradictions and not coverage_gaps,
+        }
+
+    @staticmethod
+    def _compute_evidence_strength(findings: list, shards: list) -> float:
+        """Compute evidence strength as a separate dimension from confidence.
+
+        Evidence strength = count(workers with OBSERVED or VERIFIED evidence) / total workers
+
+        Architecture rule: NO_SIGNAL cannot satisfy positive-evidence requirement.
+        UNAVAILABLE cannot count as corroboration.
+        """
+        if not findings and not shards:
+            return 0.0
+
+        # Count total unique workers/domains that contributed
+        total_workers = set()
+        observed_workers = set()
+
+        for finding in findings:
+            domain = finding.get("domain", "unknown")
+            total_workers.add(domain)
+            # Check if finding has actual evidence (not just "no signal" claims)
+            claims = finding.get("supported_claims", [])
+            has_observed = False
+            for claim in claims:
+                lowered = claim.lower()
+                # A claim is NO_SIGNAL if it starts with negation or contains
+                # explicit "no signal" language
+                is_no_signal = any(
+                    phrase in lowered
+                    for phrase in (
+                        "no signal",
+                        "nothing found",
+                        "no evidence",
+                        "no claim",
+                        "no dependency",
+                        "no doc",
+                        "no alert",
+                        "no telemetry",
+                        "no changed",
+                        "no build",
+                        "no dependency security claim",
+                        "no doc drift claim",
+                        "no alert storm cluster claim",
+                        "no telemetry correlation claim",
+                        "no build claim supported",
+                        "changeset contains no;",
+                    )
+                )
+                if not is_no_signal:
+                    has_observed = True
+            if has_observed:
+                observed_workers.add(domain)
+
+        for shard in shards:
+            worker = shard.get("worker", "unknown")
+            total_workers.add(worker)
+            # Check structured claims in shard
+            claims = shard.get("claims", [])
+            has_observed = False
+            for claim in claims:
+                if isinstance(claim, dict):
+                    if claim.get("evidence_state") in (
+                        EvidenceState.OBSERVED.value,
+                        EvidenceState.VERIFIED.value,
+                    ):
+                        has_observed = True
+                else:
+                    lowered = str(claim).lower()
+                    is_no_signal = any(
+                        phrase in lowered
+                        for phrase in (
+                            "no signal",
+                            "nothing found",
+                            "no evidence",
+                            "no claim",
+                            "no dependency",
+                            "no doc",
+                            "no alert",
+                            "no telemetry",
+                            "no changed",
+                            "no build",
+                        )
+                    )
+                    if not is_no_signal:
+                        has_observed = True
+            if has_observed:
+                observed_workers.add(worker)
+
+        if not total_workers:
+            return 0.0
+        return len(observed_workers) / len(total_workers)
+
+    @staticmethod
+    def _verify_claim_provenance(findings: list) -> dict:
+        """Verify claim provenance (Fix 6).
+
+        Tracks ClaimStatus for claims:
+        - UNVERIFIED: worker claim only
+        - SUPPORTED: corroborated by another worker
+        - INDEPENDENTLY_VERIFIED: verified against system of record
+
+        Two workers using the same underlying source cannot automatically count
+        as independent corroboration.
+        """
+        claim_statuses = {}
+
+        # Build claim -> domains index
+        claim_domains: dict = {}
+        for finding in findings:
+            domain = finding.get("domain", "unknown")
+            for claim_text in finding.get("supported_claims", []):
+                domains = claim_domains.setdefault(claim_text, [])
+                if domain not in domains:
+                    domains.append(domain)
+
+        for claim_text, domains in claim_domains.items():
+            if len(domains) >= 2:
+                # Corroborated by another domain's worker
+                claim_statuses[claim_text] = ClaimStatus.SUPPORTED.value
+            else:
+                claim_statuses[claim_text] = ClaimStatus.UNVERIFIED.value
+
+        return claim_statuses
+
+    @staticmethod
+    def _aggregate_evidence_states(findings: list, shards: list) -> dict:
+        """Aggregate evidence states across all findings and shards.
+
+        Returns a summary dict with counts and dominant state.
+        """
+        states = {
+            EvidenceState.OBSERVED.value: 0,
+            EvidenceState.VERIFIED.value: 0,
+            EvidenceState.NO_SIGNAL.value: 0,
+            EvidenceState.UNAVAILABLE.value: 0,
+            EvidenceState.CONTRADICTORY.value: 0,
+        }
+
+        for finding in findings:
+            for claim in finding.get("supported_claims", []):
+                lowered = claim.lower()
+                if any(
+                    phrase in lowered
+                    for phrase in (
+                        "no signal",
+                        "nothing found",
+                        "no evidence",
+                        "no claim",
+                        "no dependency",
+                        "no doc",
+                        "no alert",
+                        "no telemetry",
+                        "no changed",
+                        "no build",
+                        "no dependency security claim",
+                        "no doc drift claim",
+                        "no alert storm cluster claim",
+                        "no telemetry correlation claim",
+                        "no build claim supported",
+                        "changeset contains no;",
+                    )
+                ):
+                    states[EvidenceState.NO_SIGNAL.value] += 1
+                else:
+                    states[EvidenceState.OBSERVED.value] += 1
+
+        for shard in shards:
+            for claim in shard.get("claims", []):
+                if isinstance(claim, dict):
+                    state = claim.get("evidence_state", EvidenceState.OBSERVED.value)
+                    if state in states:
+                        states[state] += 1
+                else:
+                    lowered = str(claim).lower()
+                    if any(
+                        phrase in lowered
+                        for phrase in (
+                            "no signal",
+                            "nothing found",
+                            "no evidence",
+                            "no claim",
+                        )
+                    ):
+                        states[EvidenceState.NO_SIGNAL.value] += 1
+                    else:
+                        states[EvidenceState.OBSERVED.value] += 1
+
+        total = sum(states.values())
+        dominant = (
+            max(states, key=lambda k: states[k]) if total > 0 else "none"
+        )
+        summary = (
+            f"{states[EvidenceState.OBSERVED.value]} observed, "
+            f"{states[EvidenceState.NO_SIGNAL.value]} no_signal, "
+            f"{states[EvidenceState.VERIFIED.value]} verified, "
+            f"{states[EvidenceState.UNAVAILABLE.value]} unavailable, "
+            f"{states[EvidenceState.CONTRADICTORY.value]} contradictory"
+        )
+
+        return {
+            "counts": states,
+            "total": total,
+            "dominant_state": dominant,
+            "summary": summary,
+        }

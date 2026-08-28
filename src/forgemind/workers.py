@@ -231,6 +231,9 @@ class Worker(ABC):
         claims = self._claims(context)
         uncertainties = self._uncertainties(context)
 
+        # Build structured claims with evidence state (Fix: evidence-aware)
+        structured_claims = self._build_structured_claims(claims, context)
+
         # Prove it is a shard, not a finding/decision artifact.
         plan_provenance = coverage_plan.get("provenance") or {}
         event_id = plan_provenance.get("event_id") or coverage_plan.get(
@@ -249,6 +252,7 @@ class Worker(ABC):
             "domain": self.domain,
             "observations": observations,
             "claims": claims,
+            "structured_claims": structured_claims,
             "evidence_ids": evidence_ids,
             "confidence": self._confidence(context),
             "risk_level": self._risk_level(context),
@@ -265,6 +269,73 @@ class Worker(ABC):
             },
             "execution_trace_id": coverage_plan["execution_trace_id"],
         }
+
+    def _build_structured_claims(
+        self, claims: list, context: dict
+    ) -> list:
+        """Build structured claims with evidence state from string claims.
+
+        Each structured claim has: claim, value, evidence, source, evidence_state.
+        Evidence state is determined by the claim content:
+        - OBSERVED: concrete evidence found
+        - NO_SIGNAL: worker looked, found nothing
+        """
+        structured = []
+        inputs = context.get("inputs", {}) or {}
+        changed_files = inputs.get("changed_files") or []
+
+        for claim in claims:
+            claim_text = str(claim)
+            lowered = claim_text.lower()
+
+            # Determine evidence state
+            evidence_state = "observed"
+            if any(
+                phrase in lowered
+                for phrase in (
+                    "no signal",
+                    "nothing found",
+                    "no evidence",
+                    "no claim",
+                    "no dependency",
+                    "no doc",
+                    "no alert",
+                    "no telemetry",
+                    "no changed",
+                    "no build",
+                    "no dependency security claim",
+                    "no doc drift claim",
+                    "no alert storm cluster claim",
+                    "no telemetry correlation claim",
+                    "no build claim supported",
+                    "changeset contains no;",
+                    "no scan results recorded",
+                    "no doc drift signal recorded",
+                    "no alert signals recorded",
+                    "no telemetry signals recorded",
+                    "no changed files recorded",
+                    "ci outcome unknown",
+                )
+            ):
+                evidence_state = "no_signal"
+
+            # Build evidence list
+            evidence = []
+            if evidence_state == "observed":
+                evidence = changed_files[:5]  # Cap evidence list
+            if not evidence:
+                evidence = [f"shard:{self.worker_name}"]
+
+            structured.append(
+                {
+                    "claim": claim_text,
+                    "value": True,
+                    "evidence": evidence,
+                    "source": f"worker:{self.worker_name}",
+                    "evidence_state": evidence_state,
+                }
+            )
+        return structured
 
     # -- deterministic derived values (subclasses may override) ----------
 

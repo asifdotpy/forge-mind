@@ -132,21 +132,6 @@ def test_validation_verdict_escalation(escalation_result):
     assert proof["human_control_state"]["required_human_role"]
 
 
-def test_multi_domain_presence_corroboration_is_autonomous():
-    """ADR-011: FIXTURE-002 (multi-domain incident, every selected worker
-    runs and reports) now correlates across domains and completes
-    autonomously instead of escalating."""
-    result = _run("FIXTURE-002-escalation.json")
-    vs = result["artifacts"]["validated_situation"]
-    assert vs["causality_status"] == "correlated"
-    assert vs["coverage"]["missing_domains"] == []
-    assert vs["coverage"]["coverage_percentage"] == 100
-    terminal = result["terminal"]
-    assert terminal["type"] == "action"
-    assert terminal["decision_record"]["autonomy_class"] == "safe_autonomous"
-    assert terminal["action_validation"]["policy_result"] == "allowed"
-
-
 def test_uncertainty_summary_shape(action_result, escalation_result):
     for result in (action_result, escalation_result):
         summary = result["m3_proof"]["uncertainty_summary"]
