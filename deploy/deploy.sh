@@ -47,10 +47,13 @@ gcloud artifacts repositories add-iam-policy-binding "${AR_REPO}" \
   --quiet >/dev/null
 
 echo "--- Submitting Cloud Build pipeline (build -> push -> deploy) ---"
+# _COMMIT_SHA: the built-in COMMIT_SHA substitution is empty for manual
+# `gcloud builds submit`, which yields an invalid untagged image name.
+_COMMIT_SHA="$(git rev-parse --short HEAD)"
 gcloud builds submit \
   --project "${PROJECT_ID}" \
   --config deploy/cloudbuild.yaml \
-  --substitutions="_REGION=${REGION},_AR_REPO=${AR_REPO},_SERVICE=${SERVICE}" \
+  --substitutions="_REGION=${REGION},_AR_REPO=${AR_REPO},_SERVICE=${SERVICE},_COMMIT_SHA=${_COMMIT_SHA}" \
   .
 
 echo "--- Fetching service URL ---"

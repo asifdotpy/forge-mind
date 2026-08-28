@@ -14,14 +14,14 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:${_COMMIT_SHA}'
       - '.'
 
   # 2) Push the container image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:${_COMMIT_SHA}'
 
   # 3) Deploy the image to Cloud Run (managed)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -31,7 +31,7 @@ steps:
       - 'deploy'
       - '${_SERVICE}'
       - '--image'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:${_COMMIT_SHA}'
       - '--region'
       - '${_REGION}'
       - '--platform'
@@ -40,12 +40,16 @@ steps:
 
 # Keep the pushed image in the registry.
 images:
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$COMMIT_SHA'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:${_COMMIT_SHA}'
 
 substitutions:
   _REGION: us-central1
   _AR_REPO: cloud-run-source-deploy
   _SERVICE: forgemind
+  # Custom substitution — COMMIT_SHA (built-in) is EMPTY for manual
+  # `gcloud builds submit`, which produced an invalid untagged image name.
+  # deploy/deploy.sh overrides this with `git rev-parse --short HEAD`.
+  _COMMIT_SHA: manual-build
 
 options:
   logging: CLOUD_LOGGING_ONLY
