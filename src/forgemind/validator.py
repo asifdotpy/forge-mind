@@ -177,6 +177,8 @@ class CrossLifecycleValidator:
         coverage_plan: dict,
         domain_findings: list,
         evidence_shards: Optional[list] = None,
+        repo: str = "",
+        sha: str = "",
     ) -> dict:
         """Reconcile ``domain_findings`` into a single ValidatedSituation.
 
@@ -188,6 +190,10 @@ class CrossLifecycleValidator:
                 and bounded to a domain the plan selected.
             evidence_shards: optional raw EvidenceShards folded into the
                 evidence index and deduplication pass.
+            repo: optional repository in 'owner/repo' format for independent
+                claim verification against GitHub API.
+            sha: optional commit SHA for independent claim verification
+                against GitHub API.
 
         Returns:
             A ``ValidatedSituation`` dict validating against
@@ -268,7 +274,7 @@ class CrossLifecycleValidator:
         # Evidence strength: separate dimension from confidence
         evidence_strength = self._compute_evidence_strength(findings, shards)
         # Claim provenance: verify claims against systems of record
-        claim_statuses = self._verify_claim_provenance(findings)
+        claim_statuses = self._verify_claim_provenance(findings, repo=repo, sha=sha)
         # Aggregate evidence states for the situation
         evidence_states = self._aggregate_evidence_states(findings, shards)
 
@@ -854,17 +860,36 @@ class CrossLifecycleValidator:
         return len(observed_workers) / len(total_workers)
 
     @staticmethod
-    def _verify_claim_provenance(findings: list) -> dict:
-        """Verify claim provenance (Fix 6).
+    def _verify_claim_provenance(
+        findings: list, repo: str = "", sha: str = ""
+    ) -> dict:
+        """Verify claim provenance, including independent verification.
 
-        Tracks ClaimStatus for claims:
-        - UNVERIFIED: worker claim only
-        - SUPPORTED: corroborated by another worker
-        - INDEPENDENTLY_VERIFIED: verified against system of record
+        For each claim:
+        1. Check if a verifier exists (via VerifierRegistry)
+        2. If yes and repo/sha provided → query external source
+        3. If confirmed → INDEPENDENTLY_VERIFIED
+        4. If not confirmed or no verifier → check cross-domain matching
+        5. If corroborated by another domain → SUPPORTED
+        6. Otherwise → UNVERIFIED
 
-        Two workers using the same underlying source cannot automatically count
-        as independent corroboration.
+        Architecture rule: **If no verifier exists for a claim type, the
+        claim stays UNVERIFIED. Inference alone cannot upgrade to
+        INDEPENDENTLY_VERIFIED.**
+
+        Args:
+            findings: List of DomainFinding dicts with supported_claims.
+            repo: Optional repository in 'owner/repo' format. When empty,
+              falls back to local-only cross-domain matching.
+            sha: Optional commit SHA. When empty, falls back to local-only
+              cross-domain matching.
+
+        Returns:
+            Dict mapping claim text to its ClaimStatus value string.
         """
+        # Import here to avoid circular import at module load
+        from forgemind.verification import VerifierRegistry
+
         claim_statuses = {}
 
         # Build claim -> domains index
@@ -877,8 +902,20 @@ class CrossLifecycleValidator:
                     domains.append(domain)
 
         for claim_text, domains in claim_domains.items():
+            # Step 1: Try independent verification if repo/sha available
+            if repo and sha:
+                structured_claim = {"claim": claim_text}
+                verified_status = VerifierRegistry.verify(
+                    structured_claim, repo, sha
+                )
+                if verified_status == ClaimStatus.INDEPENDENTLY_VERIFIED:
+                    claim_statuses[claim_text] = (
+                        ClaimStatus.INDEPENDENTLY_VERIFIED.value
+                    )
+                    continue
+
+            # Step 2: Fall back to cross-domain corroboration
             if len(domains) >= 2:
-                # Corroborated by another domain's worker
                 claim_statuses[claim_text] = ClaimStatus.SUPPORTED.value
             else:
                 claim_statuses[claim_text] = ClaimStatus.UNVERIFIED.value
