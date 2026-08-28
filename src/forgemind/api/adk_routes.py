@@ -448,13 +448,20 @@ def register_adk_routes(app: FastAPI) -> None:
         
         # Handle pull_request events
         if "pull_request" in body and body.get("action") in ("opened", "synchronize"):
+            from forgemind.enrichment import enrich_payload
+
             pr = body["pull_request"]
             repo = body["repository"]["full_name"]
-            
+            pr_number = pr["number"]
+            sha = pr.get("head", {}).get("sha", "")
+
+            # Enrich payload from GitHub API (changed files, CI outcome, docs summary, dependency scan)
+            payload = await enrich_payload(repo=repo, pr_number=pr_number, sha=sha)
+
             # Build event from PR
             event = {
-                "event_id": f"EVT-GITHUB-{pr['number']}",
-                "situation_id": f"SIT-GITHUB-{pr['number']}",
+                "event_id": f"EVT-GITHUB-{pr_number}",
+                "situation_id": f"SIT-GITHUB-{pr_number}",
                 "timestamp": pr.get("created_at", ""),
                 "source": "github",
                 "type": "pr",
@@ -474,19 +481,9 @@ def register_adk_routes(app: FastAPI) -> None:
                 "require_human_above_risk_level": "critical",
                 "max_concurrent_managers": 3,
                 "global_timeout_seconds": 300,
-                "payload": {
-                    "changed_files": _webhook_changed_files(repo, pr["number"]),
-                    "pr_number": pr["number"],
-                    "repo": repo,
-                    "sha": pr.get("head", {}).get("sha", ""),
-                    # Acquisition contract (acquisition._select_domains):
-                    # payload.affected_domains is the ONLY channel the
-                    # Supervisor honours for multi-domain selection — the
-                    # event-level selected_domains key is display-only.
-                    "affected_domains": ["code", "delivery", "production"],
-                },
+                "payload": payload,
             }
-            
+
             # Process the event
             result = await adk_ingest_event(AdkEventInput(event=event))
             if isinstance(result, dict):

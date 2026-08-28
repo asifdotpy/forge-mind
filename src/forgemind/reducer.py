@@ -583,15 +583,15 @@ class DecisionReducer:
 
         if strategy == "evidence_weighted":
             # Evidence-weighted: reward high evidence strength
-            # Scale: confidence * (0.7 + 0.3 * evidence_strength)
+            # Scale: confidence * (0.85 + 0.15 * evidence_strength)
             return round(
-                min(1.0, boosted * (0.7 + 0.3 * evidence_strength)), 2
+                min(1.0, boosted * (0.85 + 0.15 * evidence_strength)), 2
             )
 
         if strategy == "conservative_weighted":
             # Conservative weighted: min of boosted and evidence-weighted
             evidence_weighted = min(
-                1.0, boosted * (0.7 + 0.3 * evidence_strength)
+                1.0, boosted * (0.85 + 0.15 * evidence_strength)
             )
             return round(min(boosted, evidence_weighted), 2)
 

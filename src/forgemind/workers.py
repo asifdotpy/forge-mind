@@ -559,6 +559,40 @@ class BuildLogAndFlakinessWorker(Worker):
             return ["build failed; CI gate did not pass"]
         return ["CI outcome unknown; no build claim supported"]
 
+    def _confidence(self, context: dict) -> float:
+        """Derive confidence from CI outcome.
+
+        - pass: 0.90 (high confidence in delivery health when tests & build succeed)
+        - fail: 0.20 (low confidence when build fails, pulling situation below autonomous threshold)
+        - other/unknown: delegates to base Worker dynamic confidence (~0.85).
+        """
+        value = context.get("confidence")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return max(0.0, min(1.0, float(value)))
+        outcome = context.get("inputs", {}).get("ci_outcome") or ""
+        if outcome == "fail":
+            return 0.20
+        if outcome == "pass":
+            return 0.90
+        return super()._confidence(context)
+
+    def _risk_level(self, context: dict) -> str:
+        """Derive risk level from CI outcome.
+
+        - pass: "low" (clean build indicates low delivery risk)
+        - fail: "high" (failing build is high risk, triggering review/escalation)
+        - other/unknown: delegates to base Worker risk level ("medium").
+        """
+        value = context.get("risk_level")
+        if value in ("low", "medium", "high", "critical"):
+            return value
+        outcome = context.get("inputs", {}).get("ci_outcome") or ""
+        if outcome == "fail":
+            return "high"
+        if outcome == "pass":
+            return "low"
+        return super()._risk_level(context)
+
 
 class AlertStormClusteringWorker(Worker):
     """Delivery domain: alert storm triage (narrow extension)."""

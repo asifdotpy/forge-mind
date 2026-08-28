@@ -64,8 +64,11 @@ def run_pipeline(body: EventInput) -> Dict[str, Any]:
         domain_findings = [
             findings_by_domain[domain] for domain in sorted(findings_by_domain)
         ]
+    payload = event.get("payload") or {}
+    repo = str(payload.get("repo") or "")
+    sha = str(payload.get("sha") or "")
     validated = CrossLifecycleValidator().validate(
-        plan, domain_findings, shards or None
+        plan, domain_findings, shards or None, repo=repo, sha=sha
     )
 
     # Tier 5 — Decision Reducer: deterministic autonomy ladder.

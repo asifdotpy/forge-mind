@@ -112,6 +112,7 @@ MODULES = [
     # Change 2: the self-contained event context derivation module is
     # runtime-only and must stay free of chromadb (ADR-009).
     "forgemind.worker_contexts",
+    "forgemind.enrichment",
 ]
 
 for _name in MODULES:
