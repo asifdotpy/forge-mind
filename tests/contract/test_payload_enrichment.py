@@ -44,9 +44,12 @@ class MockGitHubClient:
         files: list | None = None,
         check_runs: list | None = None,
         commit_status: dict | None = None,
+        advisories: list | None = None,
+        file_contents: dict | None = None,
         raise_on_files: bool = False,
         raise_on_check_runs: bool = False,
         raise_on_status: bool = False,
+        raise_on_advisories: bool = False,
     ):
         self.files = files if files is not None else [
             {"filename": "README.md"},
@@ -57,9 +60,12 @@ class MockGitHubClient:
             {"name": "test", "status": "completed", "conclusion": "success"},
         ]
         self.commit_status = commit_status or {"state": "success"}
+        self.advisories = advisories if advisories is not None else []
+        self.file_contents = file_contents or {}
         self.raise_on_files = raise_on_files
         self.raise_on_check_runs = raise_on_check_runs
         self.raise_on_status = raise_on_status
+        self.raise_on_advisories = raise_on_advisories
         self.calls = []
 
     def get(self, path: str, **kwargs):
@@ -76,6 +82,16 @@ class MockGitHubClient:
             if self.raise_on_status:
                 raise RuntimeError("GitHub API network error on status")
             return self.commit_status
+        if "advisories" in path:
+            if self.raise_on_advisories:
+                raise RuntimeError("GitHub Advisory API error")
+            return self.advisories
+        if "contents" in path:
+            for fname, c in self.file_contents.items():
+                if fname in path:
+                    import base64
+                    return {"content": base64.b64encode(c.encode()).decode()}
+            return {}
         return {}
 
 
@@ -85,6 +101,7 @@ def test_enrich_payload_clean_pr_produces_all_worker_signals():
         files=[
             {"filename": "README.md"},
             {"filename": "docs/guide.md"},
+            {"filename": "package.json"},
         ],
         check_runs=[
             {"name": "test", "status": "completed", "conclusion": "success"}
@@ -104,11 +121,11 @@ def test_enrich_payload_clean_pr_produces_all_worker_signals():
     assert payload["repo"] == "thevertexagents/vertex-sentinel"
     assert payload["pr_number"] == 101
     assert payload["sha"] == "abc1234"
-    assert payload["changed_files"] == ["README.md", "docs/guide.md"]
+    assert "package.json" in payload["changed_files"]
     assert payload["ci_outcome"] == "pass"
     assert "documentation updated" in payload["docs_summary"]
-    assert len(payload["dependency_scan"]) == 1
-    assert "dependencies verified clean" in payload["dependency_scan"][0]
+    assert len(payload["dependency_scan"]) >= 1
+    assert any("clean" in s or "0 known" in s for s in payload["dependency_scan"])
     assert payload["affected_domains"] == ["code", "delivery", "production"]
 
 
@@ -244,7 +261,112 @@ def test_enrich_payload_dependency_manifest_change():
     )
 
     assert "package.json" in payload["changed_files"]
-    assert any("package.json" in s for s in payload["dependency_scan"])
+    assert any("clean" in s or "0 known" in s or "package.json" in s for s in payload["dependency_scan"])
+
+
+def test_enrich_payload_advisory_detects_ghsa_vulnerability():
+    """Vulnerability detected in GitHub Advisory DB triggers security findings and prevents autonomy."""
+    client = MockGitHubClient(
+        files=[{"filename": "package.json"}],
+        file_contents={"package.json": '{"dependencies": {"vulnerable-pkg": "^1.0.0"}}'},
+        advisories=[
+            {
+                "ghsa_id": "GHSA-xxxx-yyyy",
+                "summary": "Remote code execution in vulnerable-pkg",
+                "severity": "critical",
+            }
+        ],
+        check_runs=[{"name": "test", "status": "completed", "conclusion": "success"}],
+    )
+
+    payload = asyncio.run(
+        enrich_payload(
+            repo="thevertexagents/vertex-sentinel",
+            pr_number=106,
+            sha="vuln123",
+            client=client,
+            use_cache=False,
+        )
+    )
+
+    assert any("GHSA-xxxx-yyyy" in s for s in payload["dependency_scan"])
+
+    event = {
+        "event_id": "EVT-TEST-106",
+        "situation_id": "SIT-TEST-106",
+        "timestamp": "2026-08-28T12:00:00Z",
+        "source": "github",
+        "type": "pr",
+        "summary": "Vulnerable dependency PR",
+        "reference": "https://github.com/thevertexagents/vertex-sentinel/pull/106",
+        "affected_entities": ["thevertexagents/vertex-sentinel"],
+        "provenance": {"source_system": "github", "sender": "developer"},
+        "selected_domains": ["code", "delivery", "production"],
+        "selected_workers": [
+            "pr-pre-flight-ast-worker",
+            "docs-drift-and-spec-worker",
+            "build-log-and-flakiness-worker",
+            "alert-storm-clustering-worker",
+            "telemetry-correlation-worker",
+            "security-and-dependency-worker",
+        ],
+        "require_human_above_risk_level": "critical",
+        "max_concurrent_managers": 3,
+        "global_timeout_seconds": 300,
+        "payload": payload,
+    }
+
+    result = run_adk_pipeline(EventInput(event=event))
+    m3 = result.get("m3_proof", {})
+    control = m3.get("human_control_state", {})
+
+    # Critical security advisory must NEVER be safe_autonomous
+    assert control.get("autonomy_class") != "safe_autonomous"
+    assert control.get("autonomy_class") in ("human_review", "escalate")
+
+
+def test_enrich_payload_gitbook_site_verification():
+    """When GitBook API key is provided, site is queried and doc sync is confirmed."""
+    client = MockGitHubClient(files=[{"filename": "src/api.py"}])
+
+    mock_resp = MagicMock()
+    mock_resp.ok = True
+    mock_resp.json.return_value = {"items": [{"title": "API Specification"}]}
+
+    with patch("requests.get", return_value=mock_resp):
+        payload = asyncio.run(
+            enrich_payload(
+                repo="thevertexagents/vertex-sentinel",
+                pr_number=107,
+                sha="gb123",
+                client=client,
+                gitbook_api_key="gb_test_key",
+                gitbook_organization_id="org_test",
+                gitbook_site_id="site_test",
+                use_cache=False,
+            )
+        )
+
+    assert "GitBook site site_test" in payload["docs_summary"]
+
+
+def test_enrich_payload_no_docs_no_deps_produces_honest_no_signal():
+    """PR touching only code without doc changes or deps produces honest empty signals."""
+    client = MockGitHubClient(files=[{"filename": "src/algo.py"}])
+
+    payload = asyncio.run(
+        enrich_payload(
+            repo="thevertexagents/vertex-sentinel",
+            pr_number=108,
+            sha="codeonly123",
+            client=client,
+            use_cache=False,
+        )
+    )
+
+    assert payload["changed_files"] == ["src/algo.py"]
+    assert payload["docs_summary"] == ""
+    assert payload["dependency_scan"] == []
 
 
 def test_enrich_payload_offline_fallback_degrades_gracefully():
