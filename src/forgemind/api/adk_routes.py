@@ -211,7 +211,7 @@ def _analysis_comment_from(result: Dict[str, Any]) -> str:
         f"**Situation:** {reasoning_path or 'n/a'}",
         f"**Autonomy Class:** {control.get('autonomy_class') or 'n/a'}",
         f"**Human Control:** {control.get('state') or 'n/a'}",
-        f"**Confidence:** {confidence if confidence is not None else 'n/a'}",
+        f"**Confidence:** {round(confidence, 2) if isinstance(confidence, (int, float)) else 'n/a'}",
         f"**Risk Level:** {control.get('risk_level') or 'n/a'}",
         f"**Verdict:** {verdict.get('state') or 'n/a'}",
     ]
