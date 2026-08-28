@@ -42,7 +42,7 @@ Demo/Production Readiness (30%).
 
 ## 3:30–4:00 — Production readiness + close
 - Show Cloud Run dashboard / Vertex AI logs (proof it runs on Google Cloud).
-- `uv run pytest tests/` → **140 passed**.
+- `uv run pytest tests/` → **236 passed, 1 skipped**.
 - "Reproducible: clone, `uv sync`, `uv run pytest`. Deployed on Cloud Run.
   ForgeMind — autonomous, evidence-driven, human-aware."
 

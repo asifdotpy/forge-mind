@@ -293,7 +293,7 @@ $ .venv/bin/python -m pytest tests/ -q
 
 | Check | Command | Result |
 |-------|---------|--------|
-| Deterministic suite, chromadb import-blocked | `PYTHONPATH=<blocker>:src pytest tests/` | 141 passed, 0 failed |
+| Deterministic suite, chromadb import-blocked | `PYTHONPATH=<blocker>:src pytest tests/` | 231 passed, 0 failed |
 | Runtime import, chromadb blocked | `python -c "import forgemind"` | OK 0.1.0 |
 | chromadb absent from production image | `docker run … python -c "import chromadb"` | `ModuleNotFoundError` |
 | runtime importable in production image | `docker run … python -c "import forgemind"` | OK 0.1.0 |
