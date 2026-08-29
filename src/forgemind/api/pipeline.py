@@ -9,6 +9,7 @@ from forgemind._paths import FIXTURES_INPUT_DIR
 from forgemind.acquisition import acquire_event
 from forgemind.action_gate import ActionValidationGate, publish_terminal_output
 from forgemind.api.models import EventInput
+from forgemind.situation_store import SituationStore
 from forgemind.domain_managers import ManagerCoordinator
 from forgemind.m3_proof import build_m3_proof
 from forgemind.reducer import DecisionReducer
@@ -130,8 +131,11 @@ def _fixture_body_for(situation_id: str) -> Optional[EventInput]:
 
     The runtime is stateless (no artifact store), so ``GET
     /api/v1/situations/{id}`` re-derives the situation by replaying the
-    matching canonical fixture input.  Returns ``None`` when nothing matches.
+    matching canonical fixture input. Returns ``None`` when nothing matches.
+
+    Also checks the dynamic situation store for webhook-generated situations.
     """
+    # First: check canonical fixtures (existing behavior)
     for path in sorted(FIXTURES_INPUT_DIR.glob("*.json")):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
@@ -140,4 +144,6 @@ def _fixture_body_for(situation_id: str) -> Optional[EventInput]:
         event = payload.get("event")
         if isinstance(event, dict) and event.get("situation_id") == situation_id:
             return EventInput(**payload)
-    return None
+
+    # Second: check dynamic situation store (webhook-generated)
+    return SituationStore.get_event(situation_id)

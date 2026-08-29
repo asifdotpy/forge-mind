@@ -24,11 +24,25 @@ from forgemind.api.dashboard.helpers import _esc
 
 def _approval_page_html(token: str) -> str:
     """Render the approval page for a pending token."""
+    # Get situation context if available
+    situation = SituationStore.get(token)
+    context_html = ""
+    if situation:
+        event = situation.get("event", {})
+        pr = event.get("payload", {}).get("pull_request", {})
+        title = pr.get("title", "Unknown PR")
+        context_html = f"""
+        <div class="context">
+        <h2>Pull Request</h2>
+        <p><strong>{_esc(title)}</strong></p>
+        </div>
+        """
+    
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale-1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ForgeMind · Approval Required</title>
 <style>
 :root {{ color-scheme: dark; --bg:#09090b; --surface:#111113; --surface-2:#18181b;
@@ -40,6 +54,7 @@ body {{ margin:0; background:var(--bg); color:var(--text);
 .card {{ background:var(--surface); border:1px solid var(--border);
   border-radius:10px; padding:1.5rem; margin-bottom:1rem; }}
 h1 {{ margin:0 0 .5rem; font-size:1.3rem; }}
+h2 {{ margin:0 0 .5rem; font-size:1rem; color:var(--text-2); }}
 p {{ color:var(--text-2); margin:0 0 1rem; }}
 .approval {{ display:flex; gap:.75rem; margin:1rem 0; }}
 .btn {{ display:inline-flex; align-items:center; gap:.4rem;
@@ -50,6 +65,10 @@ p {{ color:var(--text-2); margin:0 0 1rem; }}
 .token {{ font-family:ui-monospace,monospace; font-size:.75rem; color:var(--info);
   background:var(--surface-2); padding:.5rem; border-radius:6px;
   word-break:break-all; margin-top:1rem; }}
+textarea {{ width:100%; min-height:80px; background:var(--surface-2);
+  border:1px solid var(--border); border-radius:8px; padding:.6rem;
+  color:var(--text); font-size:.85rem; resize:vertical; margin-top:.5rem; }}
+label {{ display:block; font-size:.75rem; color:var(--muted); margin-top:.8rem; }}
 </style>
 </head>
 <body>
@@ -57,6 +76,7 @@ p {{ color:var(--text-2); margin:0 0 1rem; }}
 <div class="card">
 <h1>ForgeMind — Approval Required</h1>
 <p>A proposed action is awaiting your review. Please approve or reject.</p>
+{context_html}
 <div class="approval">
 <a class="btn btn-approve" href="/api/v1/approvals/{_esc(token)}?decision=approve">✓ Approve</a>
 <a class="btn btn-reject" href="/api/v1/approvals/{_esc(token)}?decision=reject">✕ Reject</a>
@@ -114,6 +134,7 @@ p {{ color:var(--text-2); margin:0; }}
 from forgemind.api.errors import PIPELINE_ERRORS, SERVICE_VERSION
 from forgemind.api.models import ApprovalDecision, EventInput
 from forgemind.api.pipeline import _fixture_body_for, run_pipeline
+from forgemind.situation_store import SituationStore
 
 # ADK routes are registered lazily inside create_api() so the deterministic
 # path is byte-for-byte unaffected when google-adk is not installed.
@@ -275,10 +296,10 @@ def create_api() -> FastAPI:
         }
 
     @app.get("/api/v1/approvals/{token}")
-    async def approval_view(token: str, decision: Optional[str] = None):
+    async def approval_view(token: str, decision: Optional[str] = None, comment: str = ""):
         """View or act on a pending approval.
 
-        Without ``decision``: returns an HTML approval page.
+        Without ``decision``: returns an HTML approval page with comment field.
         With ``decision=approve|reject``: processes the decision and returns result.
         """
         if not is_adk_runtime():
@@ -291,19 +312,13 @@ def create_api() -> FastAPI:
             )
 
         if decision is None:
-            # Return approval page
-            return HTMLResponse(
-                content=_approval_page_html(token),
-                status_code=200,
-            )
+            # Return approval page with comment field
+            return HTMLResponse(content=_approval_page_html(token))
 
         # Process decision from query param
         try:
-            result = resume_adk_pipeline(token, decision)
-            return HTMLResponse(
-                content=_approval_result_html(result, decision),
-                status_code=200,
-            )
+            result = resume_adk_pipeline(token, decision, user_comment=comment)
+            return HTMLResponse(content=_approval_result_html(result, decision))
         except ApprovalError as exc:
             return HTMLResponse(
                 content=f"<!DOCTYPE html><html><body><h1>Approval Error</h1><p>{_esc(str(exc))}</p></body></html>",

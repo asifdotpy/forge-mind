@@ -292,18 +292,23 @@ def run_adk_pipeline(body: Any) -> Dict[str, Any]:
     )
 
 
-def resume_adk_pipeline(token: str, decision: str) -> Dict[str, Any]:
+def resume_adk_pipeline(
+    token: str, 
+    decision: str, 
+    user_comment: str = "",
+) -> Dict[str, Any]:
     """Resume a PAUSED workflow after a human decision.
 
     Args:
         token: the opaque ``pending_approval.token`` from a paused run.
         decision: ``"approve"`` (proceed to publish the gated outcome) or
             ``"reject"`` (record an Escalation, publish no action).
+        user_comment: Optional reviewer feedback to attach to the result.
 
     Returns:
         The same pipeline-shaped result as :func:`run_adk_pipeline` would have
         returned had it published immediately, augmented with
-        ``human_decision``.
+        ``human_decision`` and optionally ``human_comment``.
 
     Raises:
         ApprovalError: the token is unknown / already consumed.
@@ -371,7 +376,7 @@ def resume_adk_pipeline(token: str, decision: str) -> Dict[str, Any]:
             f"decision must be 'approve' or 'reject', got {decision!r}"
         )
 
-    return _assemble_result(
+    result = _assemble_result(
         plan=plan,
         supervisor_dispatch=pending["supervisor_dispatch"],
         shards=pending["shards"],
@@ -380,6 +385,12 @@ def resume_adk_pipeline(token: str, decision: str) -> Dict[str, Any]:
         terminal=terminal,
         human_decision=decision,
     )
+    
+    # Attach user comment if provided
+    if user_comment:
+        result["human_comment"] = user_comment
+    
+    return result
 
 
 def _decision_record_from_pending(pending: dict) -> dict:

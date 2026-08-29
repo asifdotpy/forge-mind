@@ -29,6 +29,7 @@ Routes:
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -40,6 +41,7 @@ from forgemind.acquisition import EventValidationError
 from forgemind.adk_app import create_adk_runner, describe_adk_agents
 from forgemind.adk_runtime import run_adk_pipeline
 from forgemind.api.errors import PIPELINE_ERRORS
+from forgemind.situation_store import SituationStore
 
 logger = logging.getLogger(__name__)
 
@@ -232,9 +234,12 @@ def _analysis_comment_from(result: Dict[str, Any]) -> str:
     # Add approval link if pending_approval exists
     pending = result.get("pending_approval") or {}
     token = pending.get("token")
+    situation_id = result.get("situation_id", reasoning_path or "")
     if token:
-        approve_url = f"https://forgemind-n3nupsii5a-uc.a.run.app/api/v1/approvals/{token}"
-        lines.append(f"[Approve]({approve_url}?decision=approve) | [Reject]({approve_url}?decision=reject)")
+        service_url = os.environ.get("FORGEMIND_SERVICE_URL", "https://forgemind-n3nupsii5a-uc.a.run.app")
+        approve_url = f"{service_url}/api/v1/approvals/{token}"
+        view_url = f"{service_url}/view/{situation_id}"
+        lines.append(f"[Review & Approve]({approve_url}) | [View Analysis]({view_url})")
         lines.append("")
 
     lines.append("[ForgeMind Dashboard](https://forgemind-n3nupsii5a-uc.a.run.app/)")
@@ -498,6 +503,12 @@ def register_adk_routes(app: FastAPI) -> None:
             # Process the event
             result = await adk_ingest_event(AdkEventInput(event=event))
             if isinstance(result, dict):
+                # Store situation for dashboard viewing
+                SituationStore.save(
+                    situation_id=result.get("situation_id", f"SIT-GITHUB-{pr_number}"),
+                    event=event,
+                    result=result,
+                )
                 # Execute exactly the actions autonomy selected (comment for
                 # safe_autonomous + human_review; status check for autonomous).
                 result["actions_result"] = _execute_github_actions(event, result)
