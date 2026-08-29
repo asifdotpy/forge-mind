@@ -20,6 +20,97 @@ from forgemind.adk_runtime import (
 )
 from forgemind.api.dashboard import DEFAULT_VIEWER_SITUATION_ID, _render_situation_html
 from forgemind.api.dashboard.helpers import _esc
+
+
+def _approval_page_html(token: str) -> str:
+    """Render the approval page for a pending token."""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale-1">
+<title>ForgeMind · Approval Required</title>
+<style>
+:root {{ color-scheme: dark; --bg:#09090b; --surface:#111113; --surface-2:#18181b;
+  --border:#27272a; --text:#fafafa; --text-2:#a1a1aa; --muted:#71717a;
+  --ok:#34d399; --danger:#f87171; --info:#60a5fa; }}
+body {{ margin:0; background:var(--bg); color:var(--text);
+  font:15px/1.55 ui-sans-serif,system-ui,sans-serif; }}
+.wrap {{ max-width:600px; margin:0 auto; padding:2rem 1.5rem; }}
+.card {{ background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; padding:1.5rem; margin-bottom:1rem; }}
+h1 {{ margin:0 0 .5rem; font-size:1.3rem; }}
+p {{ color:var(--text-2); margin:0 0 1rem; }}
+.approval {{ display:flex; gap:.75rem; margin:1rem 0; }}
+.btn {{ display:inline-flex; align-items:center; gap:.4rem;
+  font-size:.9rem; font-weight:600; padding:.6rem 1.2rem;
+  border-radius:8px; text-decoration:none; cursor:pointer; }}
+.btn-approve {{ color:var(--ok); border:1px solid var(--ok); background:rgba(52,211,153,.09); }}
+.btn-reject {{ color:var(--danger); border:1px solid rgba(248,113,113,.45); background:rgba(248,113,113,.09); }}
+.token {{ font-family:ui-monospace,monospace; font-size:.75rem; color:var(--info);
+  background:var(--surface-2); padding:.5rem; border-radius:6px;
+  word-break:break-all; margin-top:1rem; }}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="card">
+<h1>ForgeMind — Approval Required</h1>
+<p>A proposed action is awaiting your review. Please approve or reject.</p>
+<div class="approval">
+<a class="btn btn-approve" href="/api/v1/approvals/{_esc(token)}?decision=approve">✓ Approve</a>
+<a class="btn btn-reject" href="/api/v1/approvals/{_esc(token)}?decision=reject">✕ Reject</a>
+</div>
+<div class="token">Token: {_esc(token)}</div>
+</div>
+</div>
+</body>
+</html>"""
+
+
+def _approval_result_html(result: Dict[str, Any], decision: str) -> str:
+    """Render the approval result page."""
+    status = result.get("status", "ok")
+    terminal = result.get("terminal", {})
+    terminal_type = terminal.get("type", "unknown")
+    is_approved = decision == "approve"
+
+    if is_approved:
+        title = "Action Approved"
+        message = f"The action has been approved and published. Terminal: {terminal_type}"
+        color = "var(--ok)"
+    else:
+        title = "Action Rejected"
+        message = "The action has been rejected and an escalation has been recorded."
+        color = "var(--danger)"
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale-1">
+<title>ForgeMind · {"Approved" if is_approved else "Rejected"}</title>
+<style>
+:root {{ color-scheme: dark; --bg:#09090b; --surface:#111113; --border:#27272a;
+  --text:#fafafa; --text-2:#a1a1aa; --ok:#34d399; --danger:#f87171; }}
+body {{ margin:0; background:var(--bg); color:var(--text);
+  font:15px/1.55 ui-sans-serif,system-ui,sans-serif; }}
+.wrap {{ max-width:600px; margin:0 auto; padding:2rem 1.5rem; }}
+.card {{ background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; padding:1.5rem; }}
+h1 {{ margin:0 0 .5rem; color:{color}; }}
+p {{ color:var(--text-2); margin:0; }}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="card">
+<h1>{title}</h1>
+<p>{message}</p>
+</div>
+</div>
+</body>
+</html>"""
 from forgemind.api.errors import PIPELINE_ERRORS, SERVICE_VERSION
 from forgemind.api.models import ApprovalDecision, EventInput
 from forgemind.api.pipeline import _fixture_body_for, run_pipeline
@@ -183,27 +274,51 @@ def create_api() -> FastAPI:
             "contract": json.loads(path.read_text(encoding="utf-8")),
         }
 
-    @app.post("/api/v1/approvals/{token}")
-    async def approve(token: str, decision: ApprovalDecision):
-        """Human-approval resume endpoint for the ADK M3-B pause gate.
+    @app.get("/api/v1/approvals/{token}")
+    async def approval_view(token: str, decision: Optional[str] = None):
+        """View or act on a pending approval.
 
-        A workflow PAUSED at the ``human_approval`` node (because the Action
-        Validation gate returned ``requires_human``) exposes a
-        ``pending_approval.token`` and this resume endpoint.  Posting
-        ``{"decision": "approve"}`` publishes the gated outcome; posting
-        ``{"decision": "reject"}`` records an Escalation and publishes no
-        action.  Under the default ``deterministic`` runtime this endpoint is
-        inert and returns 404 (no workflows are ever paused there).
+        Without ``decision``: returns an HTML approval page.
+        With ``decision=approve|reject``: processes the decision and returns result.
         """
         if not is_adk_runtime():
             return JSONResponse(
                 status_code=404,
                 content={
                     "error": "not_found",
-                    "detail": (
-                        "human-approval resume is only available when "
-                        "FORGEMIND_RUNTIME=adk"
-                    ),
+                    "detail": "human-approval resume is only available when FORGEMIND_RUNTIME=adk",
+                },
+            )
+
+        if decision is None:
+            # Return approval page
+            return HTMLResponse(
+                content=_approval_page_html(token),
+                status_code=200,
+            )
+
+        # Process decision from query param
+        try:
+            result = resume_adk_pipeline(token, decision)
+            return HTMLResponse(
+                content=_approval_result_html(result, decision),
+                status_code=200,
+            )
+        except ApprovalError as exc:
+            return HTMLResponse(
+                content=f"<!DOCTYPE html><html><body><h1>Approval Error</h1><p>{_esc(str(exc))}</p></body></html>",
+                status_code=404,
+            )
+
+    @app.post("/api/v1/approvals/{token}")
+    async def approve(token: str, decision: ApprovalDecision):
+        """Human-approval resume endpoint for the ADK M3-B pause gate."""
+        if not is_adk_runtime():
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": "not_found",
+                    "detail": "human-approval resume is only available when FORGEMIND_RUNTIME=adk",
                 },
             )
         try:

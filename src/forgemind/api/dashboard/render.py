@@ -11,6 +11,9 @@ from forgemind.api.dashboard.sections import (
     _evidence_section,
     _gate_section,
     _hero_state,
+    _what_happened_section,
+    _next_steps_section,
+    _approval_section,
     _uncertainty_section,
 )
 from forgemind.api.errors import SERVICE_VERSION
@@ -68,6 +71,9 @@ def _render_situation_html(result: Dict[str, Any]) -> str:
         '<a class="btn" href="#trace">View evidence chain ↓</a></section>'
     )
     gate = _gate_section(terminal, proof)
+    what_happened_sec = _what_happened_section(proof, artifacts)
+    next_steps_sec = _next_steps_section(proof)
+    approval_sec = _approval_section(proof, result)
     chain_sec = _chain_section(links, terminal)
     evidence_sec = _evidence_section(artifacts)
     uncertainty_sec = _uncertainty_section(proof)
@@ -97,7 +103,10 @@ def _render_situation_html(result: Dict[str, Any]) -> str:
 
 <main>
 {hero}
+{what_happened_sec}
 {gate}
+{approval_sec}
+{next_steps_sec}
 {chain_sec}
 <div class="grid2">
 {evidence_sec}

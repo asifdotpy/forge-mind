@@ -228,6 +228,15 @@ def _analysis_comment_from(result: Dict[str, Any]) -> str:
         lines.append(f"**Reason:** {reason}")
 
     lines.append("")
+
+    # Add approval link if pending_approval exists
+    pending = result.get("pending_approval") or {}
+    token = pending.get("token")
+    if token:
+        approve_url = f"https://forgemind-n3nupsii5a-uc.a.run.app/api/v1/approvals/{token}"
+        lines.append(f"[Approve]({approve_url}?decision=approve) | [Reject]({approve_url}?decision=reject)")
+        lines.append("")
+
     lines.append("[ForgeMind Dashboard](https://forgemind-n3nupsii5a-uc.a.run.app/)")
     lines.append("")
     lines.append("---")

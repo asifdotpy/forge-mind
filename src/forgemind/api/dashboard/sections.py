@@ -32,24 +32,24 @@ def _hero_state(
             f"(policy result: {_esc(verdict.get('policy_result'))}) and is "
             "authorized to execute autonomously."
         )
-        return "ok", "✓", "AUTONOMOUS ACTION AUTHORIZED", explain
+        return "ok", "✓", "Autonomous Action Authorized", explain
     if state == "human_review":
         explain = (
-            f"Proposed action {_dash(action_id)} was withheld by the safety "
-            f"gate: {_esc(reason)} Executing it requires human authority."
+            "ForgeMind analyzed this situation and determined that human "
+            "authority is needed before taking action."
         )
-        return "warn", "⚠", "HUMAN APPROVAL REQUIRED", explain
+        return "info", "ℹ", "Human Review Required", explain
     if av:
         explain = (
-            "No autonomous execution - the safety gate stopped the proposed "
-            f"action: {_esc(reason)}"
+            "The safety gate applied — human authority is required before "
+            "this action can execute."
         )
-        return "danger", "✕", "ACTION BLOCKED BY SAFETY GATE", explain
+        return "info", "ℹ", "Safety Gate Applied", explain
     explain = (
-        "No action was proposed - ForgeMind escalated the situation for "
-        f"human review: {_esc(esc.get('summary') or reason)}"
+        "ForgeMind escalated this situation for human review: "
+        f"{_esc(esc.get('summary') or reason)}"
     )
-    return "danger", "!", "ESCALATED TO HUMAN", explain
+    return "review", "ⓘ", "Escalated to Human Review", explain
 
 
 def _gate_section(terminal: Dict[str, Any], proof: Dict[str, Any]) -> str:
@@ -63,11 +63,11 @@ def _gate_section(terminal: Dict[str, Any], proof: Dict[str, Any]) -> str:
             '<section class="card" id="safety-gate">' + heading
             + '<p class="subtle">No action reached the safety gate in this '
               "run — ForgeMind escalated before proposing an action.</p>"
-            + '<p class="gate-answer"><strong>Why didn&#39;t ForgeMind act?'
+            + '<p class="gate-answer"><strong>Why is human review needed?'
               f"</strong> {_esc(reason)}</p></section>"
         )
     pr = av.get("policy_result")
-    tone = {"allowed": "ok", "requires_human": "warn",
+    tone = {"allowed": "ok", "requires_human": "info",
             "rejected": "danger"}.get(str(pr), "info")
     checks_html = "".join(
         "<li class=\"check {}\">"
@@ -77,7 +77,7 @@ def _gate_section(terminal: Dict[str, Any], proof: Dict[str, Any]) -> str:
             "pass" if chk.get("passed") else "fail",
             "✓" if chk.get("passed") else "✕",
             _esc(chk.get("check")),
-            "passed" if chk.get("passed") else "blocked",
+            "passed" if chk.get("passed") else "requires authority",
             _esc(chk.get("detail")),
         )
         for chk in (av.get("checks") or [])
@@ -85,17 +85,159 @@ def _gate_section(terminal: Dict[str, Any], proof: Dict[str, Any]) -> str:
     answer = ""
     if pr == "requires_human":
         answer = (
-            '<p class="gate-answer"><strong>Why didn&#39;t ForgeMind '
-            "execute the action?</strong> Because executing it requires "
-            "human authority.</p>"
+            '<p class="gate-answer"><strong>Why is human review needed?'
+            "</strong> Because executing this action requires human authority "
+            "per policy.</p>"
         )
     return (
         '<section class="card" id="safety-gate">' + heading
         + '<div class="gate-verdict">'
         + f'<span class="pill {tone}">{_esc(pr)}</span>'
-        + '<span>validation <span class="mono">'
+        + '<span>validation <span class="mono\">'
         + f"{_esc(av.get('validation_id'))}</span></span></div>"
         + f'<ul class="checks">{checks_html}</ul>' + answer + "</section>"
+    )
+
+
+def _what_happened_section(proof: Dict[str, Any], artifacts: Dict[str, Any]) -> str:
+    """Plain-language explanation of why the system made this decision."""
+    unc = proof["uncertainty_summary"]
+    ctl = proof["human_control_state"]
+    conf_pct = _pct(unc.get("confidence"))
+    caus = unc.get("causality_status")
+    caus_note = _CAUSALITY_NOTES.get(str(caus), "") if caus else ""
+
+    vs = artifacts.get("validated_situation") or {}
+    cov = vs.get("coverage") or {}
+    provided = cov.get("provided_domains") or []
+    missing = cov.get("missing_domains") or []
+    total = len(provided) + len(missing)
+
+    shards = artifacts.get("evidence_shards") or []
+    findings = artifacts.get("domain_findings") or []
+
+    parts = []
+    parts.append(
+        f"ForgeMind analyzed {len(shards)} evidence shard"
+        f"{'s' if len(shards) != 1 else ''} across {len(findings)} domain"
+        f"{'s' if len(findings) != 1 else ''}."
+    )
+    parts.append(
+        f"Confidence: {conf_pct} — evaluated against the decision policy "
+        f"(escalate below {_GAUGE_ESCALATE_PCT}%; autonomous at or above "
+        f"{_GAUGE_AUTONOMOUS_PCT}%)."
+    )
+    if caus_note:
+        parts.append(f"Causality: {_esc(caus)} — {_esc(caus_note)}.")
+    if total:
+        parts.append(
+            f"Coverage: {len(provided)} of {total} planned domains analyzed."
+        )
+    state = ctl.get("state")
+    if state == "automated":
+        parts.append("Result: All safety checks passed — action authorized.")
+    elif state == "escalated":
+        parts.append("Result: Situation escalated for human review.")
+    else:
+        parts.append("Result: Human review required before autonomous action.")
+
+    items = "".join(f"<li>{_esc(p)}</li>" for p in parts)
+    return (
+        '<section class="card" id="what-happened">'
+        '<h2 class="label">what happened</h2>'
+        '<p class="subtle">A plain-language summary of how ForgeMind '
+        "reached this decision.</p>"
+        f"<ul class=\"wh-list\">{items}</ul>"
+        "</section>"
+    )
+
+
+def _next_steps_section(proof: Dict[str, Any]) -> str:
+    """Clear call-to-action: what the user should do next."""
+    ctl = proof["human_control_state"]
+    state = ctl.get("state")
+    role = ctl.get("required_human_role")
+
+    if state == "automated":
+        steps = [
+            "Review the evidence chain and metrics below to confirm the decision.",
+            "No further action required — the action is authorized to execute.",
+        ]
+    elif state == "escalated":
+        steps = [
+            "Review the evidence chain and coverage gaps below.",
+            f"A designated {_dash(role)} will assess the situation.",
+            "Provide additional context to improve future decisions.",
+        ]
+    else:
+        steps = [
+            "Review the evidence chain and safety gate checks below.",
+            "Approve or reject the proposed action.",
+            "Provide additional context to improve future decisions.",
+        ]
+
+    items = "".join(f"<li>{_esc(s)}</li>" for s in steps)
+    return (
+        '<section class="card" id="next-steps">'
+        '<h2 class="label">next steps</h2>'
+        '<p class="subtle">What you can do with this decision.</p>'
+        f"<ul class=\"ns-list\">{items}</ul>"
+        "</section>"
+    )
+
+
+def _approval_section(proof: Dict[str, Any], result: Dict[str, Any]) -> str:
+    """Interactive approval section for human_review state.
+
+    Shows Approve/Reject buttons with the pending_approval token.
+    """
+    ctl = proof["human_control_state"]
+    state = ctl.get("state")
+    pending = result.get("pending_approval") or {}
+    token = pending.get("token") or ""
+    resume_endpoint = pending.get("resume_endpoint") or ""
+
+    if state == "automated":
+        return (
+            '<section class="card" id="approval">'
+            '<h2 class="label">approval</h2>'
+            '<p class="subtle">This action was authorized autonomously.</p>'
+            '<p class="approval-status ok">✓ Action authorized — no human approval required.</p>'
+            "</section>"
+        )
+
+    if state == "escalated":
+        return (
+            '<section class="card" id="approval">'
+            '<h2 class="label">approval</h2>'
+            '<p class="subtle">This situation was escalated for human review.</p>'
+            '<p class="approval-status">ⓘ Escalated — awaiting human assessment.</p>'
+            "</section>"
+        )
+
+    # human_review state
+    if not token:
+        return (
+            '<section class="card" id="approval">'
+            '<h2 class="label">approval</h2>'
+            '<p class="subtle">Human review is required.</p>'
+            '<p class="approval-status">No pending approval token available.</p>'
+            "</section>"
+        )
+
+    approve_url = f"/api/v1/approvals/{token}"
+    reject_url = f"/api/v1/approvals/{token}"
+
+    return (
+        '<section class="card" id="approval">'
+        '<h2 class="label">approval</h2>'
+        '<p class="subtle">Approve or reject the proposed action.</p>'
+        '<div class="approval">'
+        f'<a class="btn-approve" href="{approve_url}?decision=approve">✓ Approve</a>'
+        f'<a class="btn-reject" href="{reject_url}?decision=reject">✕ Reject</a>'
+        "</div>"
+        f'<div class="token-display">Token: {_esc(token)}</div>'
+        "</section>"
     )
 
 
