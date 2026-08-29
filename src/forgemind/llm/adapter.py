@@ -37,6 +37,7 @@ __all__ = ["generate_observations", "generate_claims", "DEFAULT_MODEL"]
 
 #: Default Gemini model (Gemini 3.5 Flash — cheapest 3.5 tier on Vertex).
 DEFAULT_MODEL = "gemini-3.5-flash"
+FALLBACK_MODEL = "gemini-2.5-flash"
 
 #: Hard caps so a runaway model response can never blow up a shard.
 _MAX_ITEMS = 25
@@ -137,7 +138,11 @@ def _parse_lines(text: str) -> Optional[List[str]]:
 
 
 def _generate(kind: str, domain: str, context: dict, model: str) -> Optional[List[str]]:
-    """Core Gemini call.  Returns a string list or ``None`` (never raises)."""
+    """Core Gemini call.  Returns a string list or ``None`` (never raises).
+
+    Tries the primary model first.  On 404 (model not available) or 429
+    (quota exhausted), falls back to FALLBACK_MODEL before giving up.
+    """
     project, api_key, location = _resolve_credentials()
     if not project:
         return None  # No credentials -> deterministic fallback.
@@ -151,18 +156,31 @@ def _generate(kind: str, domain: str, context: dict, model: str) -> Optional[Lis
             # Vertex AI path: relies on Application Default Credentials.
             client = genai.Client(vertexai=True, project=project, location=location)
 
-        response = client.models.generate_content(
-            model=model,
-            contents=_build_prompt(kind, domain, context),
-        )
-        text = getattr(response, "text", None)
-        if text is None and getattr(response, "candidates", None):
-            text = "".join(
-                part.text
-                for part in response.candidates[0].content.parts
-                if getattr(part, "text", None)
-            )
-        return _parse_lines(text or "")
+        models_to_try = [model, FALLBACK_MODEL] if model != FALLBACK_MODEL else [model]
+        for m in models_to_try:
+            try:
+                response = client.models.generate_content(
+                    model=m,
+                    contents=_build_prompt(kind, domain, context),
+                )
+                text = getattr(response, "text", None)
+                if text is None and getattr(response, "candidates", None):
+                    text = "".join(
+                        part.text
+                        for part in response.candidates[0].content.parts
+                        if getattr(part, "text", None)
+                    )
+                result = _parse_lines(text or "")
+                if result is not None:
+                    return result
+            except Exception as exc:
+                err_str = str(exc)
+                # 404 = model not available, 429 = quota exhausted
+                if "404" in err_str or "429" in err_str:
+                    continue
+                # Other errors: fail-closed
+                return None
+        return None
     except Exception:
         # Fail-closed: ANY model/network/auth/parse error degrades to the
         # deterministic path.  Never surface the exception into the pipeline.

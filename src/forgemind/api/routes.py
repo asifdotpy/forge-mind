@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from forgemind._env import load_dotenv
@@ -77,10 +77,14 @@ label {{ display:block; font-size:.75rem; color:var(--muted); margin-top:.8rem; 
 <h1>ForgeMind — Approval Required</h1>
 <p>A proposed action is awaiting your review. Please approve or reject.</p>
 {context_html}
+<form method="POST" action="/api/v1/approvals/{_esc(token)}/form">
+<label for="comment">Reviewer Comments (optional)</label>
+<textarea id="comment" name="comment" placeholder="Add your reasoning, concerns, or conditions for this decision..."></textarea>
 <div class="approval">
-<a class="btn btn-approve" href="/api/v1/approvals/{_esc(token)}?decision=approve">✓ Approve</a>
-<a class="btn btn-reject" href="/api/v1/approvals/{_esc(token)}?decision=reject">✕ Reject</a>
+<button type="submit" name="decision" value="approve" class="btn btn-approve">✓ Approve</button>
+<button type="submit" name="decision" value="reject" class="btn btn-reject">✕ Reject</button>
 </div>
+</form>
 <div class="token">Token: {_esc(token)}</div>
 </div>
 </div>
@@ -94,6 +98,7 @@ def _approval_result_html(result: Dict[str, Any], decision: str) -> str:
     terminal = result.get("terminal", {})
     terminal_type = terminal.get("type", "unknown")
     is_approved = decision == "approve"
+    human_comment = result.get("human_comment", "")
 
     if is_approved:
         title = "Action Approved"
@@ -104,11 +109,15 @@ def _approval_result_html(result: Dict[str, Any], decision: str) -> str:
         message = "The action has been rejected and an escalation has been recorded."
         color = "var(--danger)"
 
+    comment_html = ""
+    if human_comment:
+        comment_html = f'<div class="comment-box"><strong>Reviewer Comment:</strong><br>{_esc(human_comment)}</div>'
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale-1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ForgeMind · {"Approved" if is_approved else "Rejected"}</title>
 <style>
 :root {{ color-scheme: dark; --bg:#09090b; --surface:#111113; --border:#27272a;
@@ -120,6 +129,8 @@ body {{ margin:0; background:var(--bg); color:var(--text);
   border-radius:10px; padding:1.5rem; }}
 h1 {{ margin:0 0 .5rem; color:{color}; }}
 p {{ color:var(--text-2); margin:0; }}
+.comment-box {{ margin-top:1rem; padding:.8rem; background:rgba(96,165,250,.08);
+  border:1px solid rgba(96,165,250,.3); border-radius:8px; font-size:.85rem; color:var(--text-2); }}
 </style>
 </head>
 <body>
@@ -127,6 +138,7 @@ p {{ color:var(--text-2); margin:0; }}
 <div class="card">
 <h1>{title}</h1>
 <p>{message}</p>
+{comment_html}
 </div>
 </div>
 </body>
@@ -342,6 +354,29 @@ def create_api() -> FastAPI:
             return JSONResponse(
                 status_code=404,
                 content={"error": "not_found", "detail": str(exc)},
+            )
+
+    @app.post("/api/v1/approvals/{token}/form")
+    async def approve_form(token: str, request: Request):
+        """Handle form-encoded approval submission (from the approval page)."""
+        if not is_adk_runtime():
+            return HTMLResponse(
+                content="<!DOCTYPE html><html><body><h1>Not Available</h1>"
+                        "<p>human-approval resume is only available when "
+                        "FORGEMIND_RUNTIME=adk</p></body></html>",
+                status_code=404,
+            )
+        form = await request.form()
+        decision_val = str(form.get("decision", ""))
+        comment_val = str(form.get("comment", ""))
+        try:
+            result = resume_adk_pipeline(token, decision_val, user_comment=comment_val)
+            return HTMLResponse(content=_approval_result_html(result, decision_val))
+        except ApprovalError as exc:
+            return HTMLResponse(
+                content=f"<!DOCTYPE html><html><body><h1>Approval Error</h1>"
+                        f"<p>{_esc(str(exc))}</p></body></html>",
+                status_code=404,
             )
 
     # Register ADK 2.0 integration routes under /api/v1/adk/.

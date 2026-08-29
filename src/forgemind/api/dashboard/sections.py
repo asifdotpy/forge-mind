@@ -10,6 +10,7 @@ from forgemind.api.dashboard.constants import (
     _GAUGE_ESCALATE_PCT,
 )
 from forgemind.api.dashboard.helpers import _dash, _esc, _pct, _risk_pill
+from forgemind.api.dashboard.charts import evidence_distribution_chart, confidence_trend_chart
 from forgemind.api.errors import SERVICE_VERSION
 
 def _hero_state(
@@ -407,6 +408,27 @@ def _uncertainty_section(proof: Dict[str, Any]) -> str:
         f"<span>autonomous ≥ {_GAUGE_AUTONOMOUS_PCT}%</span>"
         "</div>" + caus_line + unc_block + "</section>"
     )
+
+def _charts_section(proof: Dict[str, Any], artifacts: Dict[str, Any], result: Dict[str, Any]) -> str:
+    """SVG charts: evidence distribution + confidence trend."""
+    evidence_chart = evidence_distribution_chart(artifacts)
+    confidence_chart = confidence_trend_chart(result)
+    return (
+        '<section class="card" id="charts">'
+        '<h2 class="label">analytics</h2>'
+        '<div class="charts-grid">'
+        '<div class="chart-box">'
+        '<div class="chart-title">Evidence Distribution</div>'
+        f'{evidence_chart}'
+        '</div>'
+        '<div class="chart-box">'
+        '<div class="chart-title">Confidence Trend</div>'
+        f'{confidence_chart}'
+        '</div>'
+        '</div>'
+        "</section>"
+    )
+
 
 def _control_section(proof: Dict[str, Any]) -> str:
     """Human-control panel: authority, autonomy class, risk, decision owner."""

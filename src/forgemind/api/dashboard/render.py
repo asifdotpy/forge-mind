@@ -15,6 +15,7 @@ from forgemind.api.dashboard.sections import (
     _next_steps_section,
     _approval_section,
     _uncertainty_section,
+    _charts_section,
 )
 from forgemind.api.errors import SERVICE_VERSION
 from forgemind.m3_proof import build_m3_proof
@@ -77,6 +78,7 @@ def _render_situation_html(result: Dict[str, Any]) -> str:
     chain_sec = _chain_section(links, terminal)
     evidence_sec = _evidence_section(artifacts)
     uncertainty_sec = _uncertainty_section(proof)
+    charts_sec = _charts_section(proof, artifacts, result)
     control_sec = _control_section(proof)
     css = _VIEWER_CSS
     title_sid = _esc(links.get("situation_id") or "situation")
@@ -112,6 +114,7 @@ def _render_situation_html(result: Dict[str, Any]) -> str:
 {evidence_sec}
 {uncertainty_sec}
 </div>
+{charts_sec}
 {control_sec}
 </main>
 
