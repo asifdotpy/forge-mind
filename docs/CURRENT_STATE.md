@@ -2,7 +2,7 @@
 
 **Date**: 2026-08-28
 **Phase**: Phase 4 (SPEC-002) COMPLETE — acceptance test passes; ADR-012 authored; docs/status hygiene done
-**Status**: SPEC-001 COMPLETE (M1/M2/M3 done) · SPEC-002 Phase 0 (deploy) + Phase 4 (acceptance test) + Phase 5 (demo) complete; Phase 1–3 in progress (connector/CI/CD/secrets) · 243 passed, 1 skipped (live-token-gated) green
+**Status**: SPEC-001 COMPLETE (M1/M2/M3 done) · SPEC-002 Phase 0 (deploy) + Phase 4 (acceptance test) + Phase 5 (demo) complete; Phase 1–3 in progress (connector/CI/CD/secrets) · 246 passed, 1 skipped (live-token-gated) green
 **Branch**: `main` → `origin/main` (github.com/asifdotpy/forge-mind, public)
 
 ---
@@ -261,9 +261,13 @@ Each artifact has a corresponding JSON Schema in `contracts/`.
 
 ```
 $ .venv/bin/python -m pytest tests/ -q
-...........................................................................................s.......................................................................................... [ 74%]
-..............................................................                                                                                                                         [100%]
-243 passed, 1 skipped in 25.58s
+................................................. [ 19%]
+..........................................s...... [ 39%]
+................................................. [ 59%]
+................................................. [ 79%]
+................................................. [ 99%]
+..                                                [100%]
+246 passed, 1 skipped in 30.51s
 ```
 
 | Suite | Tests |
@@ -280,14 +284,14 @@ $ .venv/bin/python -m pytest tests/ -q
 | `tests/contract/test_m3b_adk.py` | 8 (M3-B ADK) |
 | `tests/contract/test_evidence_aware_decisioning.py` | 39 (ADR-011) |
 | `tests/contract/test_adversarial_evaluation.py` | 14 (ADR-011) |
-| `tests/contract/test_payload_enrichment.py` | 7 (ADR-011 Pre-Demo Fix) |
+| `tests/contract/test_payload_enrichment.py` | 10 (ADR-011 Genuine Sources) |
 | `tests/acceptance/test_real_value.py` | 5 (SPEC-002 Phase 4) |
 | `tests/integration/test_fixture_run.py` | 4 |
 | `tests/test_secret_handling.py` | 6 (FAIL-003 guard) |
 | `tests/test_env_loader.py` | 8 (dotenv loader) |
-| **Total** | **243** |
+| **Total** | **246** |
 
-**Baseline history**: 90 → 128 → 132 → 127 → 141 → 144 → 152 → 191 (+39 ADR-011 evidence-aware) → 231 (+14 adversarial eval + 8 env loader + 18 misc growth) → 236 (+5 acceptance) → 243 (+7 payload enrichment contract tests).
+**Baseline history**: 90 → 128 → 132 → 127 → 141 → 144 → 152 → 191 (+39 ADR-011 evidence-aware) → 231 (+14 adversarial eval + 8 env loader + 18 misc growth) → 236 (+5 acceptance) → 243 (+7 payload enrichment) → 246 (+3 genuine external sources contract tests).
 
 **Every remaining test is independent of the local Knowledge Brain**: the suite runs on a bare clone with no `chromadb` installed and no `NOTION_TOKEN` set.
 
@@ -490,5 +494,8 @@ Per `spec.md` Stop Condition:
 *Updated: Phases 1+2 (docs/status hygiene + SPEC-002 completion) — refreshed CURRENT_STATE.md header to 2026-08-28 and §6.1 test table to 231+1; fixed stale test counts across SUBMISSION/*.md, README.md, docs/PROJECT.md, ADR-011; added ADR-010/011 rows to docs/decisions/README.md; checked off all 10 acceptance criteria in specs/001-hierarchical-runtime-dag/spec.md; flipped T025 tracker in tasks.md; aligned .env.example (FORGEMIND_RUNTIME=adk + FORGEMIND_ADK_MODEL); authored specs/002-realworld-deployment/tasks.md; implemented tests/acceptance/test_real_value.py (5 tests, all passing — SPEC-002 Phase 4 gate satisfied); authored ADR-012-realworld-deployment-surroundings.md (candidate status, honest implemented-vs-deferred table) — 2026-08-28*
 
 *Updated: Webhook Payload Enrichment (ADR-011 Pre-Demo Fix) — authored `src/forgemind/enrichment.py` providing asynchronous, cached payload enrichment from GitHub APIs (PR Files, Check Runs, Commit Statuses). Enriches inbound PR events with `changed_files`, `ci_outcome` ("pass"|"fail"|"unknown"), `docs_summary`, and `dependency_scan` so Tier-3 specialist workers produce real OBSERVED signals (evidence strength 0.67 on clean PRs vs 0.17 previously). Wired `CrossLifecycleValidator().validate(..., repo=repo, sha=sha)` in both `run_adk_pipeline` and `run_pipeline` for independent claim verification; calibrated `BuildLogAndFlakinessWorker` dynamic confidence (0.90 pass / 0.20 fail / 0.50 unknown) and risk levels; verified clean PRs reach `safe_autonomous` and post status checks, while failing CI / missing signals safely fall back to `human_review` / `escalate`. 7 new contract tests added in `tests/contract/test_payload_enrichment.py`. Suite green: 243 passed, 1 skipped — 2026-08-28*
+
+*Updated: Genuine External Evidence Sources (GitHub Advisory API, GitBook API, ADK 2 Search) — eliminated heuristic file matching in payload enrichment. Integrated public GitHub Advisory Database queries (`/advisories`) for modified dependency manifests (`package.json`, `requirements.txt`, `Cargo.toml`, etc.) to produce genuine GHSA vulnerability findings or verified clean audits; integrated live GitBook space querying (`GITBOOK_API_KEY`, `GITBOOK_SPACE_ID`) with honest in-repo docs diff inspection and strict `NO_SIGNAL` fallbacks; integrated ADK 2 search tool for monitoring/incident verification; updated `SecurityAndDependencyWorker` and `AlertStormClusteringWorker` risk/confidence derivation; calibrated `DecisionReducer` evidence-weighted scaling to `(0.85 + 0.15 * evidence_strength)`. 10 contract tests in `tests/contract/test_payload_enrichment.py`. Suite green: 246 passed, 1 skipped — 2026-08-28*
+
 
 

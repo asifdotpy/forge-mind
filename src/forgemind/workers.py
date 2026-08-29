@@ -617,6 +617,17 @@ class AlertStormClusteringWorker(Worker):
             "no alert storm cluster claim (no signals)"
         ]
 
+    def _risk_level(self, context: dict) -> str:
+        value = context.get("risk_level")
+        if value in ("low", "medium", "high", "critical"):
+            return value
+        alerts = context.get("inputs", {}).get("alert_signals") or []
+        if any("critical" in str(a).lower() or "incident" in str(a).lower() or "storm" in str(a).lower() for a in alerts):
+            return "critical"
+        if alerts:
+            return "low" if any("clean" in str(a).lower() or "zero" in str(a).lower() for a in alerts) else "high"
+        return super()._risk_level(context)
+
 
 class TelemetryCorrelationWorker(Worker):
     """Production domain: telemetry correlation and anomaly detection (MVP)."""
@@ -672,6 +683,30 @@ class SecurityAndDependencyWorker(Worker):
         return [f"reviewed {len(scan)} dependency scan result(s)"] if scan else [
             "no dependency security claim (no scan results)"
         ]
+
+    def _confidence(self, context: dict) -> float:
+        value = context.get("confidence")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return max(0.0, min(1.0, float(value)))
+        scan = context.get("inputs", {}).get("dependency_scan") or []
+        if any("vulnerability" in str(s).lower() or "advisory detected" in str(s).lower() for s in scan):
+            return 0.30
+        if scan:
+            return 0.90
+        return super()._confidence(context)
+
+    def _risk_level(self, context: dict) -> str:
+        value = context.get("risk_level")
+        if value in ("low", "medium", "high", "critical"):
+            return value
+        scan = context.get("inputs", {}).get("dependency_scan") or []
+        if any("critical" in str(s).lower() for s in scan):
+            return "critical"
+        if any("vulnerability" in str(s).lower() or "advisory detected" in str(s).lower() or "high" in str(s).lower() for s in scan):
+            return "high"
+        if scan:
+            return "low"
+        return super()._risk_level(context)
 class WorkerRegistry:
     """Factory mapping a canonical worker id to its concrete worker class.
 
