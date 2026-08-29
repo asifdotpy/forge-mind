@@ -350,10 +350,14 @@ def _fetch_gitbook_docs_summary_sync(
 # -- 5. Monitoring & Telemetry Evidence (ADK 2 Search) -----------------------
 
 def _fetch_monitoring_signals_sync(repo: str, changed_files: List[str]) -> Dict[str, List[Any]]:
-    """Fetch monitoring & incident signals via ADK 2 web search.
+    """Fetch monitoring signals via ADK 2 search agent.
 
-    Searches public web sources for active incidents, outages, or alerts
-    affecting the repository or its services.
+    Uses Google ADK 2.0 with the google_search tool to find active
+    incidents, outages, or alerts affecting the repository.
+
+    This creates a dedicated ADK session with a search agent because
+    google_search is a model-grounding tool that requires a full LLM session.
+
     Returns:
         Dict with keys: alert_signals, telemetry_signals.
     """
@@ -361,47 +365,19 @@ def _fetch_monitoring_signals_sync(repo: str, changed_files: List[str]) -> Dict[
     telemetry_signals: List[float] = []
 
     try:
-        # Use ADK 2 Google Search capability to find active incidents
-        # This runs outside an LLM session by using web search directly
-        search_query = f"{repo} outage alert incident status page"
-        search_results = _web_search(search_query)
-        if search_results:
-            for result in search_results[:5]:
-                title = result.get("title", "")
-                snippet = result.get("snippet", "")
-                if any(kw in (title + snippet).lower() for kw in ("outage", "incident", "alert", "down", "degraded")):
-                    alert_signals.append(f"public incident: {title} — {snippet}")
-    except Exception:
-        logger.debug("ADK 2 monitoring search unavailable")
+        from src.forgemind.monitoring_search import MonitoringSearchService
 
-    # Honest NO_SIGNAL when no monitoring data is available
+        service = MonitoringSearchService(model="gemini-2.5-flash")
+        results = asyncio.run(service.search_incidents(repo))
+        alert_signals = results.get("alerts", [])
+        telemetry_signals = results.get("telemetry", [])
+    except Exception as exc:
+        logger.debug("ADK monitoring search failed: %s", exc)
+
     return {
         "alert_signals": alert_signals,
         "telemetry_signals": telemetry_signals,
     }
-
-
-def _web_search(query: str) -> List[Dict[str, str]]:
-    """Perform a web search for public incident/outage information.
-
-    This is a best-effort lookup that attempts to use available search
-    capabilities. Returns empty list (NO_SIGNAL) when no search tool
-    is available or the query fails — never fabricates results.
-    """
-    try:
-        # Attempt to use ADK 2 search capability
-        # Note: ADK search tools (google_search, enterprise_web_search) are
-        # model-grounding tools that require a full ADK session. They cannot
-        # be invoked standalone from a webhook enrichment context.
-        # 
-        # For genuine monitoring data, the system needs either:
-        # - A dedicated monitoring integration (Datadog, PagerDuty)
-        # - An ADK agent session with search capabilities
-        #
-        # Without these, we return honest NO_SIGNAL.
-        return []
-    except Exception:
-        return []
 
 
 # -- Core Enrichment Execution -----------------------------------------------

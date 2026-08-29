@@ -267,10 +267,10 @@ def build_action_gate_agent() -> Any:
 def _adk_model() -> str:
     """Resolve the ADK model string from the environment.
 
-    Defaults to ``gemini-2.5-flash`` (matches
+    Defaults to ``gemini-3.5-flash`` (matches
     :data:`forgemind.llm.adapter.DEFAULT_MODEL`).
     """
-    return os.environ.get("FORGEMIND_ADK_MODEL", "gemini-2.5-flash")
+    return os.environ.get("FORGEMIND_ADK_MODEL", "gemini-3.5-flash")
 
 
 def _try_vertex_memory() -> Optional[Any]:
@@ -301,7 +301,7 @@ def _try_vertex_memory() -> Optional[Any]:
     location = (
         os.environ.get("GOOGLE_CLOUD_LOCATION")
         or os.environ.get("VERTEX_LOCATION")
-        or "us-central1"
+        or "global"
     )
     agent_builder_project = os.environ.get("FORGEMIND_VERTEX_AGENT_BUILDER_PROJECT", project)
 

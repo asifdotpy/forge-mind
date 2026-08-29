@@ -25,7 +25,7 @@ def _get_location() -> str:
     return (
         os.environ.get("GOOGLE_CLOUD_LOCATION")
         or os.environ.get("VERTEX_LOCATION")
-        or "us-central1"
+        or "global"
     )
 
 
