@@ -10,7 +10,11 @@ from forgemind.api.dashboard.constants import (
     _GAUGE_ESCALATE_PCT,
 )
 from forgemind.api.dashboard.helpers import _dash, _esc, _pct, _risk_pill
-from forgemind.api.dashboard.charts import evidence_distribution_chart, confidence_trend_chart
+from forgemind.api.dashboard.charts import (
+    evidence_distribution_chart,
+    confidence_trend_chart,
+    coverage_heatmap_chart,
+)
 from forgemind.api.errors import SERVICE_VERSION
 
 def _hero_state(
@@ -410,12 +414,59 @@ def _uncertainty_section(proof: Dict[str, Any]) -> str:
     )
 
 def _charts_section(proof: Dict[str, Any], artifacts: Dict[str, Any], result: Dict[str, Any]) -> str:
-    """SVG charts: evidence distribution + confidence trend."""
+    """SVG charts: evidence distribution + confidence trend + coverage heatmap.
+
+    Shows REAL data from the pipeline. When monitoring data is unavailable,
+    displays an honest "No data" message instead of fabricating values.
+    """
     evidence_chart = evidence_distribution_chart(artifacts)
     confidence_chart = confidence_trend_chart(result)
+    heatmap_chart = coverage_heatmap_chart(artifacts)
+
+    # Determine if we have real monitoring data or fallback/empty data
+    shards = artifacts.get("evidence_shards") or []
+    has_real_data = bool(shards)
+
+    # Check if any shard has actual observed evidence (not just no_signal)
+    has_observed = False
+    for shard in shards:
+        for claim in (shard.get("structured_claims") or []):
+            if claim.get("evidence_state") in ("observed", "verified"):
+                has_observed = True
+                break
+        if has_observed:
+            break
+
+    # Honest monitoring status banner
+    if not has_real_data:
+        monitoring_status = (
+            '<div class="monitoring-status no-data">'
+            '<span class="ms-glyph">○</span>'
+            '<span><strong>No monitoring source configured.</strong> '
+            'Run with GITHUB_TOKEN and enrichment enabled to populate these charts.</span>'
+            '</div>'
+        )
+    elif not has_observed:
+        monitoring_status = (
+            '<div class="monitoring-status fallback">'
+            '<span class="ms-glyph">◐</span>'
+            '<span><strong>Fallback data only.</strong> '
+            'Workers produced no_signal claims — no real external evidence was retrieved.</span>'
+            '</div>'
+        )
+    else:
+        monitoring_status = (
+            '<div class="monitoring-status real">'
+            '<span class="ms-glyph">●</span>'
+            '<span><strong>Live evidence.</strong> '
+            f'{len(shards)} shard(s) with observed/verified signals.</span>'
+            '</div>'
+        )
+
     return (
         '<section class="card" id="charts">'
         '<h2 class="label">analytics</h2>'
+        f'{monitoring_status}'
         '<div class="charts-grid">'
         '<div class="chart-box">'
         '<div class="chart-title">Evidence Distribution</div>'
@@ -424,6 +475,10 @@ def _charts_section(proof: Dict[str, Any], artifacts: Dict[str, Any], result: Di
         '<div class="chart-box">'
         '<div class="chart-title">Confidence Trend</div>'
         f'{confidence_chart}'
+        '</div>'
+        '<div class="chart-box">'
+        '<div class="chart-title">Coverage Heatmap</div>'
+        f'{heatmap_chart}'
         '</div>'
         '</div>'
         "</section>"

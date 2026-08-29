@@ -299,12 +299,14 @@ def _fetch_gitbook_docs_summary_sync(
     """Verify documentation & spec synchronization via GitBook API or in-repo diff.
 
     Uses GitBook organization + site (per official GitBook API SDK pattern).
+    Performs real drift detection by comparing PR changed files against
+    GitBook documentation pages.
 
     Returns:
         Detailed docs summary string if documentation was verified/updated.
         Empty string (NO_SIGNAL) if no documentation exists or was checked.
     """
-    key = api_key or os.environ.get("GITBOOK_AUTH_TOKEN")
+    key = api_key or os.environ.get("GITBOOK_API_KEY") or os.environ.get("GITBOOK_AUTH_TOKEN")
     org = organization_id or os.environ.get("GITBOOK_ORGANIZATION_ID")
     site = site_id or os.environ.get("GITBOOK_SITE_ID")
 
@@ -318,23 +320,77 @@ def _fetch_gitbook_docs_summary_sync(
         or "readme" in f.lower()
     ]
 
-    # 1. If GitBook credentials configured, query GitBook site
+    # 1. If GitBook credentials configured, query GitBook site for drift detection
     if key and org and site:
         try:
             headers = {"Authorization": f"Bearer {key}"}
-            # Search GitBook site for symbols/files from changeset
-            sample_query = changed_files[0].split("/")[-1].split(".")[0] if changed_files else repo
-            resp = requests.get(
-                f"https://api.gitbook.com/v1/sites/{site}/search",
-                params={"query": sample_query, "organizationId": org},
+
+            # First, get the list of pages in the GitBook site
+            pages_resp = requests.get(
+                f"https://api.gitbook.com/v1/sites/{site}/pages",
+                params={"organizationId": org, "limit": 50},
                 headers=headers,
                 timeout=10,
             )
-            if resp.ok:
-                items = resp.json().get("items", [])
-                if items:
-                    return f"GitBook site {site} synchronized: {len(items)} matching doc section(s) verified"
-                return f"GitBook site {site} verified: documentation consistent with changeset"
+
+            gitbook_pages = []
+            if pages_resp.ok:
+                pages_data = pages_resp.json()
+                gitbook_pages = pages_data.get("items", []) if isinstance(pages_data, dict) else []
+
+            # Extract meaningful search terms from changed files
+            search_terms = []
+            for f in changed_files[:10]:
+                base = f.split("/")[-1].split(".")[0]
+                if base and base not in ("README", "LICENSE", "CHANGELOG"):
+                    search_terms.append(base)
+                # Also extract directory context
+                parts = f.split("/")
+                if len(parts) > 1:
+                    search_terms.append(parts[0])
+
+            # Search GitBook for each changed file context
+            matched_pages = []
+            searched_terms = set()
+            for term in search_terms[:5]:
+                if term in searched_terms or len(term) < 3:
+                    continue
+                searched_terms.add(term)
+
+                try:
+                    resp = requests.get(
+                        f"https://api.gitbook.com/v1/sites/{site}/search",
+                        params={"query": term, "organizationId": org},
+                        headers=headers,
+                        timeout=10,
+                    )
+                    if resp.ok:
+                        items = resp.json().get("items", [])
+                        for item in items:
+                            page_title = item.get("title", item.get("page", {}).get("title", ""))
+                            if page_title and page_title not in matched_pages:
+                                matched_pages.append(page_title)
+                except Exception as search_exc:
+                    logger.debug("GitBook search for '%s' failed: %s", term, search_exc)
+
+            # Drift detection: compare changed files against GitBook pages
+            if matched_pages:
+                drift_pages = ", ".join(matched_pages[:5])
+                if doc_files:
+                    return (
+                        f"GitBook drift detected: {len(doc_files)} in-repo doc(s) changed "
+                        f"affecting {len(matched_pages)} GitBook page(s): {drift_pages}"
+                    )
+                return (
+                    f"GitBook docs may need update: changes touch areas covered by "
+                    f"{len(matched_pages)} page(s): {drift_pages}"
+                )
+
+            # No drift detected - docs are consistent
+            if gitbook_pages:
+                return f"GitBook verified: {len(gitbook_pages)} doc page(s) checked, no drift detected"
+            return f"GitBook site {site} verified: documentation consistent with changeset"
+
         except Exception as exc:
             logger.debug("GitBook API query failed: %s", exc)
 

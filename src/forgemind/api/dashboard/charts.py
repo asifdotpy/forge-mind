@@ -203,3 +203,119 @@ def confidence_trend_chart(result: Dict[str, Any]) -> str:
         f'<path d="{line_path}" fill="none" stroke="var(--info)" stroke-width="2" stroke-linejoin="round"/>'
         f'{dots}{x_labels}</svg>'
     )
+
+
+def _coverage_heatmap_data(artifacts: Dict[str, Any]) -> Dict[str, Dict[str, int]]:
+    """Build a domain × evidence_state matrix for the coverage heatmap."""
+    # Canonical domains in lifecycle order
+    domains = ["code", "delivery", "production"]
+    states = ["observed", "no_signal", "verified", "unavailable"]
+
+    # Initialize matrix
+    matrix: Dict[str, Dict[str, int]] = {d: {s: 0 for s in states} for d in domains}
+
+    shards = artifacts.get("evidence_shards") or []
+    for shard in shards:
+        domain = shard.get("domain", "unknown")
+        if domain not in matrix:
+            matrix[domain] = {s: 0 for s in states}
+
+        structured = shard.get("structured_claims") or []
+        for claim in structured:
+            state = claim.get("evidence_state", "observed")
+            if state not in matrix[domain]:
+                state = "observed"
+            matrix[domain][state] += 1
+
+        # Also count raw claims if no structured claims
+        if not structured:
+            for claim in (shard.get("claims") or []):
+                if isinstance(claim, dict):
+                    state = claim.get("evidence_state", "observed")
+                else:
+                    lowered = str(claim).lower()
+                    state = (
+                        "no_signal"
+                        if any(p in lowered for p in ("no ", "no signal", "nothing found", "no evidence"))
+                        else "observed"
+                    )
+                if state not in matrix[domain]:
+                    state = "observed"
+                matrix[domain][state] += 1
+
+    return matrix
+
+
+def coverage_heatmap_chart(artifacts: Dict[str, Any]) -> str:
+    """Render a coverage heatmap by domain × evidence state (SVG, no deps)."""
+    matrix = _coverage_heatmap_data(artifacts)
+
+    # Filter to domains that have data
+    active_domains = [d for d, counts in matrix.items() if sum(counts.values()) > 0]
+    if not active_domains:
+        return '<p class="none-note">No coverage data recorded.</p>'
+
+    states = ["observed", "no_signal", "verified", "unavailable"]
+    state_labels = {
+        "observed": "Observed",
+        "no_signal": "No Signal",
+        "verified": "Verified",
+        "unavailable": "Unavailable",
+    }
+
+    cell_w = 80
+    cell_h = 28
+    label_w = 90
+    header_h = 24
+    svg_w = label_w + len(states) * cell_w + 10
+    svg_h = header_h + len(active_domains) * cell_h + 4
+
+    # Color intensity mapping
+    def cell_color(state: str, count: int) -> str:
+        if count == 0:
+            return "var(--surface-2)"
+        colors = {
+            "observed": f"rgba(52,211,153,{min(0.2 + count * 0.15, 0.9)})",
+            "no_signal": f"rgba(113,113,122,{min(0.2 + count * 0.15, 0.7)})",
+            "verified": f"rgba(96,165,250,{min(0.2 + count * 0.15, 0.9)})",
+            "unavailable": f"rgba(251,191,36,{min(0.2 + count * 0.15, 0.8)})",
+        }
+        return colors.get(state, "var(--surface-2)")
+
+    def text_color(state: str, count: int) -> str:
+        return "var(--text)" if count > 0 else "var(--muted)"
+
+    # Header row (state labels)
+    header_cells = []
+    for i, state in enumerate(states):
+        x = label_w + i * cell_w
+        header_cells.append(
+            f'<text x="{x + cell_w // 2}" y="{header_h - 8}" text-anchor="middle" '
+            f'font-size="9" fill="var(--muted)" font-weight="600">{_esc(state_labels[state])}</text>'
+        )
+
+    # Data rows
+    rows = []
+    for di, domain in enumerate(active_domains):
+        y = header_h + di * cell_h
+        # Domain label
+        rows.append(
+            f'<text x="{label_w - 8}" y="{y + cell_h // 2 + 4}" text-anchor="end" '
+            f'font-size="11" fill="var(--text-2)">{_esc(domain)}</text>'
+        )
+        # Cells for each state
+        for si, state in enumerate(states):
+            count = matrix[domain].get(state, 0)
+            x = label_w + si * cell_w
+            rows.append(
+                f'<rect x="{x}" y="{y}" width="{cell_w}" height="{cell_h}" rx="4" '
+                f'fill="{cell_color(state, count)}" stroke="var(--border)" stroke-width="0.5"/>'
+                f'<text x="{x + cell_w // 2}" y="{y + cell_h // 2 + 4}" text-anchor="middle" '
+                f'font-size="11" fill="{text_color(state, count)}" font-weight="600">{count}</text>'
+            )
+
+    return (
+        f'<svg viewBox="0 0 {svg_w} {svg_h}" width="100%" height="{svg_h}" '
+        f'role="img" aria-label="Coverage heatmap: {len(active_domains)} domains × {len(states)} evidence states">'
+        f'{"".join(header_cells)}{"".join(rows)}</svg>'
+    )
