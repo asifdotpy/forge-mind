@@ -267,20 +267,19 @@ def build_action_gate_agent() -> Any:
 def _adk_model() -> Any:
     """Resolve the ADK model.
     
-    Returns a Gemini instance configured for API key mode (not Vertex AI).
+    Returns a Gemini instance with a pre-configured client using API key mode.
     This ensures ADK uses GOOGLE_API_KEY instead of requiring ADC credentials.
     """
     try:
         from google.adk.models.google_llm import Gemini
         from google import genai
-        # Create client with API key mode (vertexai=False)
+        # Pre-configure client with API key mode
         client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
         return Gemini(
             model=os.environ.get("FORGEMIND_ADK_MODEL", "gemini-3.5-flash"),
             client=client,
         )
     except ImportError:
-        # Fallback to string model name if ADK not installed
         return os.environ.get("FORGEMIND_ADK_MODEL", "gemini-3.5-flash")
 
 
