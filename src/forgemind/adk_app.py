@@ -137,6 +137,53 @@ def create_adk_runner(
     return runner
 
 
+def create_adk_tool_runner(
+    *,
+    app_name: str = "forgemind",
+    session_service: Optional[Any] = None,
+    memory_service: Optional[Any] = None,
+) -> Any:
+    """Build and return the ADK 2.0 Runner wired with the tool-driven root agent.
+
+    This Runner executes the 5-tier DAG through tool calls that read/write
+    tool_context.state for the ``FORGEMIND_RUNTIME=adk+runner`` runtime.
+    """
+    adk = _import_adk()
+    if adk is _ADK_UNAVAILABLE:
+        logger.info(
+            "google-adk not installed; create_adk_tool_runner() returning None."
+        )
+        return None
+
+    from google.adk.memory import InMemoryMemoryService  # type: ignore[import-untyped]
+    from google.adk.sessions import InMemorySessionService  # type: ignore[import-untyped]
+
+    from forgemind.agents.root_agent import build_runner_root_agent
+
+    _session_service = session_service or InMemorySessionService()
+    if memory_service is not None:
+        _memory_service = memory_service
+    else:
+        _memory_service = _try_vertex_memory() or InMemoryMemoryService()
+
+    root_agent = build_runner_root_agent()
+
+    runner = adk.Runner(
+        app_name=app_name,
+        agent=root_agent,
+        session_service=_session_service,
+        memory_service=_memory_service,
+    )
+
+    logger.info(
+        "ADK tool runner created (app_name=%s, session=%s, memory=%s)",
+        app_name,
+        type(_session_service).__name__,
+        type(_memory_service).__name__,
+    )
+    return runner
+
+
 # -- Per-tier ADK agent builders (kept here so the root agent composes them) --
 
 def build_supervisor_agent() -> Any:
@@ -267,20 +314,22 @@ def build_action_gate_agent() -> Any:
 def _adk_model() -> Any:
     """Resolve the ADK model.
     
-    Returns a Gemini instance with a pre-configured client using API key mode.
-    This ensures ADK uses GOOGLE_API_KEY instead of requiring ADC credentials.
+    Returns a Gemini instance with a pre-configured client using API key mode
+    when GOOGLE_API_KEY is present, or returns the model name / default Gemini.
     """
+    model_name = os.environ.get("FORGEMIND_ADK_MODEL", "gemini-3.5-flash")
     try:
         from google.adk.models.google_llm import Gemini
         from google import genai
-        # Pre-configure client with API key mode
-        client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-        return Gemini(
-            model=os.environ.get("FORGEMIND_ADK_MODEL", "gemini-3.5-flash"),
-            client=client,
-        )
-    except ImportError:
-        return os.environ.get("FORGEMIND_ADK_MODEL", "gemini-3.5-flash")
+
+        api_key = os.environ.get("GOOGLE_API_KEY")
+        if api_key:
+            client = genai.Client(api_key=api_key)
+            return Gemini(model=model_name, client=client)
+        # Fallback to model string if no explicit API key is configured
+        return model_name
+    except Exception:
+        return model_name
 
 
 def _try_vertex_memory() -> Optional[Any]:

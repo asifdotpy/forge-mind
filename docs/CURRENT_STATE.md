@@ -1,8 +1,8 @@
 # Current State — ForgeMind v3.0
 
-**Date**: 2026-08-28
+**Date**: 2026-08-30
 **Phase**: Phase 4 (SPEC-002) COMPLETE — acceptance test passes; ADR-012 authored; docs/status hygiene done
-**Status**: SPEC-001 COMPLETE (M1/M2/M3 done) · SPEC-002 Phase 0 (deploy) + Phase 4 (acceptance test) + Phase 5 (demo) complete; Phase 1–3 in progress (connector/CI/CD/secrets) · 246 passed, 1 skipped (live-token-gated) green → 273 passed, 1 skipped (live-token-gated) green (ADR-013/014, 2026-08-30) -> 281 passed, 1 skipped (live-token-gated) green (evidence-derived confidence + classifier-domain reconciliation, 2026-08-30)
+**Status**: SPEC-001 COMPLETE (M1/M2/M3 done) · SPEC-002 Phase 0 (deploy) + Phase 4 (acceptance test) + Phase 5 (demo) complete; Phase 1–3 in progress (connector/CI/CD/secrets) · 288 passed, 1 skipped (live-token-gated) green (ADK 2.0 Runner tool integration + state-driven pipeline, 2026-08-30)
 **Branch**: `main` → `origin/main` (github.com/asifdotpy/forge-mind, public)
 
 ---
@@ -501,6 +501,8 @@ Per `spec.md` Stop Condition:
 
 
 *Updated: Evidence-Derived Confidence + Classifier-Domain Reconciliation (ADR-014 second amendment) — removed the residual `domains.update(("delivery", "production"))` brute-force in `enrichment.py` so `affected_domains` are purely classifier- + evidence-derived (`.github/workflows/ci.yml` -> `["code", "delivery"]`, `README.md` -> `["code"]`, `auth/token.py` -> `["code", "production"]`); kept one narrow queried-channel claim — monitoring `unavailable` still selects `production` so the ADR-013 cannot-assess gate stays reachable from the webhook path (an enrichment outage can never silently *raise* confidence). Made confidence evidence-derived in the three workers pinned at the flat base 0.85: `DocsDriftAndSpecWorker` (0.85 no signal / 0.90 verified clean / 0.70 drift detected), `AlertStormClusteringWorker` (0.0 monitoring-unavailable / 0.90 clean / -0.1 per alert, floor 0.3), `TelemetryCorrelationWorker` (0.0 monitoring-unavailable / 0.90 clean / -0.1 per signal, floor 0.3) — all still honor explicit context-provided confidence. `worker_contexts.build_worker_contexts` now forwards `changed_files` into every worker context that already has its own payload key, so the base file-count confidence heuristic computes meaningful values (workers without their own signal key keep empty inputs — no fabricated contexts). 8 new contract tests (3 confidence, 4 worker-contexts, 1 classifier-domains); offline-fallback test updated to the reconciliation semantics. Verified: 281 passed, 1 skipped; FastAPI app boots; black-box ALL-PASS per plan scenarios — 2026-08-30*
+
+*Updated: ADK 2.0 Runner Tool Integration + State-Driven Pipeline (`adk+runner`) — authored `src/forgemind/tools/adk_tools.py` implementing 6 ADK tool functions (`call_supervisor`, `call_workers`, `call_managers`, `call_validator`, `call_reducer`, `call_action_gate`) adhering to the canonical `tool_context.state` read/write pattern. Connected `call_action_gate` to the shared `_PENDING_APPROVALS` pause/resume store when `requires_human` is emitted. Authored `build_runner_root_agent()` in `agents/root_agent.py` assembling a tool-wired `SequentialAgent` graph with forced single-invocation instructions and `output_key` state emission. Implemented `create_adk_tool_runner()` in `adk_app.py` and `run_adk_runner_pipeline` / `run_adk_runner_pipeline_async` in `adk_runtime.py` with automatic fallback to `run_adk_pipeline`. Configured `POST /api/v1/adk/events` in `adk_routes.py` to route through the runner when `FORGEMIND_RUNTIME=adk+runner`. Documented in `.env.example`. 7 new contract tests in `tests/contract/test_adk_runner.py`. Verified: 288 passed, 1 skipped (0 failures), 0 runner fixture errors across all 6 fixtures — 2026-08-30*
 
 
 

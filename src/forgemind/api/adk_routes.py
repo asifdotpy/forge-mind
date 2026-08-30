@@ -39,7 +39,11 @@ from pydantic import BaseModel, ConfigDict
 
 from forgemind.acquisition import EventValidationError
 from forgemind.adk_app import create_adk_runner, describe_adk_agents
-from forgemind.adk_runtime import run_adk_pipeline
+from forgemind.adk_runtime import (
+    is_adk_runner_runtime,
+    run_adk_pipeline,
+    run_adk_runner_pipeline_async,
+)
 from forgemind.api.errors import PIPELINE_ERRORS
 from forgemind.situation_store import SituationStore
 
@@ -327,14 +331,21 @@ def register_adk_routes(app: FastAPI) -> None:
             # per-worker evidence from the payload.
             from forgemind.api.models import EventInput
 
-            pipeline_result = run_adk_pipeline(
-                EventInput(
-                    event=body.event,
-                    workers=body.workers,
-                    evidence_shards=body.evidence_shards,
-                    domain_findings=body.domain_findings,
-                )
+            event_input = EventInput(
+                event=body.event,
+                workers=body.workers,
+                evidence_shards=body.evidence_shards,
+                domain_findings=body.domain_findings,
             )
+
+            pipeline_result = None
+            if is_adk_runner_runtime():
+                pipeline_result = await run_adk_runner_pipeline_async(
+                    event_input, session_id=session_id
+                )
+
+            if pipeline_result is None:
+                pipeline_result = run_adk_pipeline(event_input)
         except EventValidationError as exc:
             logger.warning("ADK event validation failed: %s", exc)
             return JSONResponse(

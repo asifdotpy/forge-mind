@@ -30,11 +30,12 @@ Activation: the ADK path is inert unless ``FORGEMIND_RUNTIME=adk``.  The
 default ``deterministic`` runtime never enters this module.
 """
 
-from __future__ import annotations
-
+import logging
 import os
 import uuid
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 from forgemind.acquisition import EventValidationError, acquire_event
 from forgemind.action_gate import (
@@ -52,18 +53,22 @@ from forgemind.workers import WorkerCoordinator, WorkerError
 __all__ = [
     "ADK_WORKFLOW_NODES",
     "FORGEMIND_RUNTIME_ENV",
+    "ADK_RUNTIME_VALUE",
+    "ADK_RUNNER_RUNTIME_VALUE",
     "is_adk_runtime",
+    "is_adk_runner_runtime",
     "describe_adk_workflow",
     "run_adk_pipeline",
+    "run_adk_runner_pipeline",
+    "run_adk_runner_pipeline_async",
     "resume_adk_pipeline",
     "ApprovalError",
 ]
 
-#: Environment flag selecting the runtime.  Default (unset / any other value)
-#: keeps the deterministic pipeline; only the literal "adk" activates this
-#: module's workflow + human-approval pause.
+#: Environment flag selecting the runtime.
 FORGEMIND_RUNTIME_ENV = "FORGEMIND_RUNTIME"
 ADK_RUNTIME_VALUE = "adk"
+ADK_RUNNER_RUNTIME_VALUE = "adk+runner"
 
 #: The explicit ADK 2 workflow graph.  Each node maps 1:1 to an existing tier
 #: function; the human_approval node is the only ADK-native addition.
@@ -79,11 +84,17 @@ ADK_WORKFLOW_NODES = (
 )
 
 
-def is_adk_runtime() -> bool:
-    """True only when ``FORGEMIND_RUNTIME=adk`` (the ADK path is opted-in)."""
+def is_adk_runner_runtime() -> bool:
+    """True only when ``FORGEMIND_RUNTIME=adk+runner``."""
     return os.environ.get(FORGEMIND_RUNTIME_ENV, "deterministic").lower() == (
-        ADK_RUNTIME_VALUE
+        ADK_RUNNER_RUNTIME_VALUE
     )
+
+
+def is_adk_runtime() -> bool:
+    """True when ``FORGEMIND_RUNTIME=adk`` or ``FORGEMIND_RUNTIME=adk+runner``."""
+    val = os.environ.get(FORGEMIND_RUNTIME_ENV, "deterministic").lower()
+    return val in (ADK_RUNTIME_VALUE, ADK_RUNNER_RUNTIME_VALUE)
 
 
 def describe_adk_workflow() -> tuple:
@@ -290,6 +301,147 @@ def run_adk_pipeline(body: Any) -> Dict[str, Any]:
         validated=validated,
         terminal=terminal,
     )
+
+
+async def run_adk_runner_pipeline_async(
+    body: Any, session_id: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """Drive one Event through the ADK 2.0 Runner via tool calling over session state.
+
+    Returns the assembled pipeline-shaped result, or None if google-adk is unavailable
+    or execution encounters an error requiring fallback.
+    """
+    from forgemind.adk_app import create_adk_tool_runner, is_adk_available
+
+    if not is_adk_available():
+        return None
+
+    try:
+        runner = create_adk_tool_runner()
+    except Exception as exc:
+        logger.warning("Failed to create ADK tool runner (%s); falling back", exc)
+        return None
+
+    if runner is None:
+        return None
+
+    acquired = acquire_event(body.event)
+    event = acquired["event"]
+    plan = acquired["coverage_plan"]
+    payload = event.get("payload") or {}
+    repo = str(payload.get("repo") or "")
+    sha = str(payload.get("sha") or "")
+    event_timestamp = str(event.get("timestamp") or "")
+
+    sid = session_id or uuid.uuid4().hex
+
+    initial_state = {
+        "event": event,
+        "coverage_plan": plan,
+        "repo": repo,
+        "sha": sha,
+        "event_timestamp": event_timestamp,
+        "workers": body.workers,
+        "evidence_shards": list(body.evidence_shards or []),
+        "domain_findings": list(body.domain_findings) if body.domain_findings is not None else None,
+    }
+
+    import inspect
+    from google.genai import types
+
+    user_msg = types.Content(
+        role="user",
+        parts=[types.Part.from_text(text=f"Process event {event.get('event_id', '')}")],
+    )
+
+    try:
+        create_fn = runner.session_service.create_session
+        if inspect.iscoroutinefunction(create_fn):
+            await create_fn(
+                app_name=runner.app_name,
+                user_id="anonymous",
+                session_id=sid,
+                state=initial_state,
+            )
+        else:
+            create_fn(
+                app_name=runner.app_name,
+                user_id="anonymous",
+                session_id=sid,
+                state=initial_state,
+            )
+
+        async for _ in runner.run_async(
+            user_id="anonymous",
+            session_id=sid,
+            new_message=user_msg,
+        ):
+            pass
+
+        get_fn = runner.session_service.get_session
+        if inspect.iscoroutinefunction(get_fn):
+            sess = await get_fn(
+                app_name=runner.app_name,
+                user_id="anonymous",
+                session_id=sid,
+            )
+        else:
+            sess = get_fn(
+                app_name=runner.app_name,
+                user_id="anonymous",
+                session_id=sid,
+            )
+        final_state = sess.state if sess else {}
+    except Exception as exc:
+        logger.warning(
+            "ADK runner execution failed for session %s (%s); falling back",
+            sid,
+            exc,
+        )
+        return None
+
+    if "validated_situation" not in final_state or "supervisor_dispatch" not in final_state:
+        logger.warning(
+            "ADK runner completed without populating pipeline state for session %s; falling back",
+            sid,
+        )
+        return None
+
+    status = "paused" if final_state.get("pending_approval") else "ok"
+    return _assemble_result(
+        plan=plan,
+        supervisor_dispatch=final_state["supervisor_dispatch"],
+        shards=final_state.get("evidence_shards") or [],
+        domain_findings=final_state.get("domain_findings") or [],
+        validated=final_state["validated_situation"],
+        terminal=final_state.get("terminal"),
+        status=status,
+        pending_approval=final_state.get("pending_approval"),
+        decision_record=final_state.get("decision_record"),
+        action_validation=final_state.get("action_validation"),
+    )
+
+
+def run_adk_runner_pipeline(
+    body: Any, session_id: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """Synchronous entry point for the ADK 2.0 Runner tool execution path."""
+    import asyncio
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(
+                lambda: asyncio.run(run_adk_runner_pipeline_async(body, session_id))
+            ).result()
+    else:
+        return asyncio.run(run_adk_runner_pipeline_async(body, session_id))
 
 
 def resume_adk_pipeline(
