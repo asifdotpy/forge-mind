@@ -4,15 +4,30 @@ Builds the top-level SequentialAgent that wires the five-tier DAG
 (Supervisor -> Workers -> Managers -> Validator -> Reducer -> Action Gate)
 into a single ADK agent graph.
 
-NOTE ON ROLE (hierarchy): the authoritative decision-execution path in
-ForgeMind is the hierarchical DAG in :func:`forgemind.adk_runtime.run_adk_pipeline`
+NOTE ON ROLE (two modes): this module exposes **two** root-agent builders
+that serve different purposes in ForgeMind:
+
+1. :func:`build_root_agent` — **discovery surface**.  Constructs a
+   ``SequentialAgent`` whose sub-agents are plain ``LlmAgent`` wrappers
+   (name/description/model/instruction only, no tools, no forced call).  It
+   is a Google ``google.adk`` *coordination surface* and ``Runner`` host for
+   session-memory.  It is **NOT** an execution graph and must not be mistaken
+   for one.  Use it for introspection, discovery, and lightweight orchestration
+   where the ADK runtime drives multi-turn reasoning.
+
+2. :func:`build_runner_root_agent` — **execution graph**.  Constructs a
+   ``SequentialAgent`` whose sub-agents are tool-wired ``LlmAgent`` wrappers
+   that call their tier tool exactly once (no reasoning loop, no multi-turn).
+   The LLM is the orchestration substrate, not the decision-maker; state
+   flows forward through ``tool_context.state`` and the ADK session.  This is
+   the authoritative decision-execution path used by ``adk+runner`` mode.
+
+The authoritative *runtime* decision-execution path in ForgeMind is the
+hierarchical DAG in :func:`forgemind.adk_runtime.run_adk_pipeline`
 — Acquire -> Supervisor (Tier 1) -> Domain Managers (Tier 2) -> Specialist
 Workers (Tier 3) -> Validator (Tier 4) -> Reducer (Tier 5) -> Action Gate —
-with parent->child delegation and the pause/resume human gate.  This module's
-SequentialAgent is a Google ``google.adk`` discovery / coordination surface
-(a ``Runner`` host for session-memory); it is NOT the execution graph and must
-not be mistaken for one.  The tier ``LlmAgent`` wrappers below carry only
-name/description/model/instruction and do no delegation logic.
+with parent->child delegation and the pause/resume human gate.  Both builders
+above produce ADK agent graphs; neither replaces the runtime pipeline.
 
 The root agent is constructed lazily; all ADK imports are deferred until
 call time so the module imports cleanly without google-adk installed.
@@ -136,11 +151,17 @@ def build_runner_root_agent() -> Any:
 
 
 def build_root_agent() -> Any:
-    """Construct and return the ForgeMind root ADK agent.
+    """Construct and return the ForgeMind root ADK agent (**discovery surface**).
 
     The root agent is a :class:`~google.adk.agents.SequentialAgent` that
-    executes the five tiers in order.  Each tier is itself an ADK agent
-    (LlmAgent wrapper around the deterministic tier logic).
+    wraps the five tiers as plain ``LlmAgent`` sub-agents.  Each sub-agent
+    carries only name/description/model/instruction — **no tools, no forced
+    call**.  This makes the agent a Google ``google.adk`` coordination
+    surface and ``Runner`` host for session-memory, suitable for introspection
+    and discovery.  It is **NOT** an execution graph and must not be mistaken
+    for one.
+
+    Use :func:`build_runner_root_agent` for the tool-wired execution graph.
 
     Returns:
         A configured ``google.adk.agents.SequentialAgent``.
