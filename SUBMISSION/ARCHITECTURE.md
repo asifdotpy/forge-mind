@@ -5,41 +5,74 @@
 
 ## System Diagram (Mermaid)
 
+**Execution order** (data flows left-to-right):
 ```mermaid
-flowchart TD
-    EXT[External Event Sources\nGitHub / CI-CD / Monitoring / Slack] --> GW
+flowchart LR
+    SUP["Tier 1: Engineering Supervisor"]
 
-    subgraph GCP[Google Cloud — Vertex AI + ADK 2 + Cloud Run]
-        GW[Agent Gateway / Event Ingest\nCloud Run] --> ACQ[Acquire Layer\nEvent -> CoveragePlan]
-        ACQ --> SUP[Tier 1: Engineering Supervisor\ncoverage plan + dispatch]
-        SUP --> DM[Tier 2: Domain Managers x3\ncode / delivery / production]
-        DM --> WK[Tier 3: Specialist Workers x6\nEvidenceShards]
-        WK --> VAL[Tier 4: Cross-Lifecycle Validator\nValidatedSituation]
-        VAL --> RED[Tier 5: Decision Reducer\nDecisionRecord / ProposedAction]
-        RED --> HUM{Human Approval Gate\nADK pause/resume}
-        HUM -->|auto / approved| ACT[Action or Escalation\nno-bypass publish]
-        HUM -->|requires_human / rejected| ESC[Escalation\nsent to human role]
-    end
+    PR["PR Pre-Flight AST Worker"]
+    DOC["Docs Drift & Spec Worker"]
+    BUILD["Build Log & Flakiness Worker"]
+    ALERT["Alert Storm Clustering Worker"]
+    TEL["Telemetry Correlation Worker"]
+    SEC["Security & Dependency Worker"]
 
-    subgraph AI[Reasoning — Gemini 3.5 via Vertex AI]
-        GEN[google-genai SDK\nbounded worker node] -.fills observations.-> WK
-    end
+    CIM["Code Intelligence Manager"]
+    DHM["Delivery Health Manager"]
+    PHM["Production Health Manager"]
 
-    subgraph GOV[Security & Governance — Fortified Fleet]
-        MA[Model Armor\nprompt-injection / PII guardrails]
-        AI2[Agent Identity\nleast-privilege per tier]
-        OBS[Agent Observability\nOpenTelemetry traces + provenance]
-    end
+    VAL["Tier 4: Validator"]
+    RED["Tier 5: Reducer"]
+    GATE["Action Gate"]
 
-    GW -.Model Armor.-> MA
-    WK -.Agent Identity.-> AI2
-    ACQ -.Observability.-> OBS
+    SUP --> PR
+    SUP --> DOC
+    SUP --> BUILD
+    SUP --> ALERT
+    SUP --> TEL
+    SUP --> SEC
 
-    subgraph MEM[Memory — ADR-009 boundary]
-        KB[(Notion Knowledge Brain\ndev-time ChromaDB, CONTEXT not AUTHORITY)]
-    end
-    KB -.grounding only.-> SUP
+    PR --> CIM
+    DOC --> CIM
+    BUILD --> DHM
+    ALERT --> DHM
+    TEL --> PHM
+    SEC --> PHM
+
+    CIM --> VAL
+    DHM --> VAL
+    PHM --> VAL
+
+    VAL --> RED
+    RED --> GATE
 ```
+
+**Ownership** (static structure):
+```mermaid
+flowchart TB
+    SUP["Tier 1: Engineering Supervisor"]
+    CIM["Code Intelligence Manager"]
+    DHM["Delivery Health Manager"]
+    PHM["Production Health Manager"]
+    PR["PR Pre-Flight AST Worker"]
+    DOC["Docs Drift & Spec Worker"]
+    BUILD["Build Log & Flakiness Worker"]
+    ALERT["Alert Storm Clustering Worker"]
+    TEL["Telemetry Correlation Worker"]
+    SEC["Security & Dependency Worker"]
+
+    SUP -.owns.-> CIM
+    SUP -.owns.-> DHM
+    SUP -.owns.-> PHM
+    CIM -.owns.-> PR
+    CIM -.owns.-> DOC
+    DHM -.owns.-> BUILD
+    DHM -.owns.-> ALERT
+    PHM -.owns.-> TEL
+    PHM -.owns.-> SEC
+```
+
+*Workers produce evidence shards first, then Managers aggregate findings into DomainFindings. Ownership remains hierarchical: each Manager owns 2 Workers.*
 
 ## Hackathon mandatory requirements — coverage map
 
@@ -73,9 +106,7 @@ and `GET /` viewer expose provenance, validation verdict, uncertainty, and
 human-control state for judges.
 
 ## Known gaps (disclosed for judges)
-- **Runtime Memory Bank:** ADR-009 deliberately keeps ChromaDB dev-only; the
-  fleet's "persistent cross-session memory" is not in the runtime yet. Mitigated
-  by durable artifact lineage + Notion grounding.
-- **Model Armor** is realized via in-code deterministic guardrails + bounded
-  Gemini scope, not the managed Google Cloud Model Armor service (would be a
-  post-M3 hardening step).
+
+- **Runtime Memory Bank:** ADR-009 deliberately keeps ChromaDB dev-only; the fleet's "persistent cross-session memory" is not in the runtime yet. Mitigated by durable artifact lineage + Notion grounding.
+- **Model Armor** is realized via in-code deterministic guardrails + bounded Gemini scope, not the managed Google Cloud Model Armor service (would be a post-M3 hardening step).
+- **Flat pipeline vs hierarchical execution:** The current implementation uses a linear execution pipeline (Workers → Managers) rather than true hierarchical multi-agent coordination. This is a known design debt documented here for transparency.

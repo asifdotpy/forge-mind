@@ -4,37 +4,74 @@
 
 ForgeMind is an autonomous engineering control plane that follows software changes from pull request to production through a controlled **Five-Tier Directed Acyclic Graph (DAG)**:
 
+**Execution order** (data flows left-to-right):
+```mermaid
+flowchart LR
+    SUP["TIER 1: Engineering Supervisor"]
+
+    PR["PR Pre-Flight AST Worker"]
+    DOC["Docs Drift & Spec Worker"]
+    BUILD["Build Log & Flakiness Worker"]
+    ALERT["Alert Storm Clustering Worker"]
+    TEL["Telemetry Correlation Worker"]
+    SEC["Security & Dependency Worker"]
+
+    CIM["Code Intelligence Manager"]
+    DHM["Delivery Health Manager"]
+    PHM["Production Health Manager"]
+
+    VAL["TIER 4: Validator"]
+    RED["TIER 5: Reducer"]
+    GATE["Action Gate"]
+
+    SUP --> PR
+    SUP --> DOC
+    SUP --> BUILD
+    SUP --> ALERT
+    SUP --> TEL
+    SUP --> SEC
+
+    PR --> CIM
+    DOC --> CIM
+    BUILD --> DHM
+    ALERT --> DHM
+    TEL --> PHM
+    SEC --> PHM
+
+    CIM --> VAL
+    DHM --> VAL
+    PHM --> VAL
+
+    VAL --> RED
+    RED --> GATE
+```
+
+**Ownership** (static structure):
 ```mermaid
 flowchart TB
-    ES["Event Sources<br>GitHub · CI/CD · Monitoring · Security Signals"] --> EG["Acquire Layer / Event Gateway<br>Authenticate · Normalize · Validate SPEC-001"]
-    EG --> SUP["TIER 1: Engineering Supervisor<br>Coverage Plan · Domain Partitioning · Global Constraints"]
+    SUP["TIER 1: Engineering Supervisor"]
+    CIM["Code Intelligence Manager"]
+    DHM["Delivery Health Manager"]
+    PHM["Production Health Manager"]
+    PR["PR Pre-Flight AST Worker"]
+    DOC["Docs Drift & Spec Worker"]
+    BUILD["Build Log & Flakiness Worker"]
+    ALERT["Alert Storm Clustering Worker"]
+    TEL["Telemetry Correlation Worker"]
+    SEC["Security & Dependency Worker"]
 
-    SUP --> CIM["TIER 2: Code Intelligence Manager"]
-    SUP --> DHM["TIER 2: Delivery Health Manager"]
-    SUP --> PHM["TIER 2: Production Health Manager"]
-
-    CIM --> PR["TIER 3: PR Pre-Flight AST Worker"]
-    CIM --> DOC["TIER 3: Docs Drift & Spec Worker"]
-
-    DHM --> BUILD["TIER 3: Build Log & Flakiness Worker"]
-    DHM --> ALERT["TIER 3: Alert Storm Clustering Worker"]
-
-    PHM --> TEL["TIER 3: Telemetry Correlation Worker"]
-    PHM --> SEC["TIER 3: Security & Dependency Worker"]
-
-    PR --> EV["Durable Evidence Shards"]
-    DOC --> EV
-    BUILD --> EV
-    ALERT --> EV
-    TEL --> EV
-    SEC --> EV
-
-    EV --> VAL["TIER 4: Cross-Lifecycle Validator<br>Reconcile · Deduplicate · Verify Coverage · Conservative Causality"]
-    VAL --> RED["TIER 5: Decision Reducer & Publisher<br>Risk Policy · Safe Action · Human Escalation · Briefing"]
-
-    RED --> ACT["Action Validation & Safety Gate"]
-    ACT --> OUT["Action Execution OR Human Escalation"]
+    SUP -.owns.-> CIM
+    SUP -.owns.-> DHM
+    SUP -.owns.-> PHM
+    CIM -.owns.-> PR
+    CIM -.owns.-> DOC
+    DHM -.owns.-> BUILD
+    DHM -.owns.-> ALERT
+    PHM -.owns.-> TEL
+    PHM -.owns.-> SEC
 ```
+
+*Workers produce evidence shards first, then Managers aggregate findings into DomainFindings. Ownership remains hierarchical: each Manager owns 2 Workers.*
 
 ---
 
@@ -103,25 +140,36 @@ Event
 |---|---|---|
 | **Event Sources** | Cloud Pub/Sub + Cloud Run Webhooks | Normalize external webhooks (GitHub, CI/CD, Alertmanager) |
 | **Event Gateway** | Agent Gateway (GEAP) on Cloud Run | Authentication, payload validation against `SPEC-001` |
-| **Tier 1 (Supervisor)** | Supervisor Workflow Node (Cloud Run) | Global coverage planning, trace initialization |
-| **Tier 2 (Domain Managers)** | Manager Nodes (Cloud Run) | Domain partition execution, retry management |
-| **Tier 3 (Specialist Workers)** | Worker Nodes (Cloud Run) | Evidence production via Gemini 3.5 structured outputs |
-| **Tier 4 (Validator)** | Validator Node (Cloud Run) | Cross-domain reconciliation, conservative causality |
-| **Tier 5 (Reducer & Publisher)**| Policy Node (Cloud Run) | Risk-bound action proposal, briefing generation |
-| **Workflow Runtime** | Google ADK 2 | Deterministic DAG orchestration, pause/resume human gates |
-| **Reasoning Model** | Gemini 3.5 via Vertex AI | Structured reasoning and multi-modal code analysis |
-| **Shared State & Memory** | Memory Bank (GEAP) + Firestore (planned) | Cross-session vector retrieval & entity knowledge |
-| **Security & Guardrails** | Model Armor + Agent Identity | Input sanitization, policy guardrails, least-privilege |
-| **Observability** | Agent Observability + OpenTelemetry | End-to-end trace lineage and execution audit trails |
+| **Acquire Layer** | Cloud Run (stateless) | Event normalization + CoveragePlan generation |
+| **Engineering Supervisor** | Cloud Run + ADK 2 Session Service | Global coordination + domain partitioning |
+| **Domain Managers** | Cloud Run + ADK 2 Agents | Bounded domain dispatch + aggregation |
+| **Specialist Workers** | Cloud Run + ADK 2 Agents | Deep evidence extraction (leaf nodes) |
+| **Validator/Reducer** | Cloud Run + ADK 2 Agents | Cross-domain reconciliation + decision policy |
+| **Action Gate** | Cloud Run + ADK 2 Agents | No-bypass safety validation |
+| **Gemini 3.5** | Vertex AI / Google AI Studio | Bounded worker node (observations only) |
+| **Agent Runtime** | Cloud Run + ADK 2 Runner | Long-running, async workflow execution |
+| **Memory Bank** | Notion Knowledge Brain (ADR-009) | Dev-time grounding; runtime memory via artifact lineage |
+| **Model Armor** | Deterministic guardrails + bounded Gemini scope | Prompt-injection / PII protection |
+| **Observability** | Cloud Logging + OpenTelemetry-style traces | End-to-end reasoning chain audit |
 
 ---
 
-## Component Boundaries in Repository
+## Fortified Enterprise Fleet Mapping
 
-1. **`src/` (Source Code)**:
-   - Modular implementation of the 5 tiers and ADK 2 workflow runner.
-   - Strictly conforms to contracts in `docs/specs/SPEC-001.md`.
-2. **`tests/` (Verification Suites)**:
-   - Unit tests, schema validators, fixture tests (`FIXTURE-001`), and evaluation harnesses.
-3. **`docs/` (Cognitive Memory)**:
-   - Single source of truth for architectural records (`decisions/`), specifications (`specs/`), active status (`CURRENT_STATE.md`), and failure lessons (`FAILURE_LOG.md`).
+| Fleet capability | ForgeMind realization |
+|---|---|
+| **Agent Registry** | Canonical spec + contracts under `specs/001-hierarchical-runtime-dag/` |
+| **Agent Runtime** | `adk_runtime.py` — long-running, pause/resume-capable workflow |
+| **Memory Bank** | Notion Knowledge Brain (ADR-009) — dev-time CONTEXT only |
+| **Agent Identity** | Least-privilege tier boundaries (ADR-003..007) |
+| **Agent Gateway** | `api.py` event ingest + validation |
+| **Model Armor** | Deterministic guardrails + ActionValidation gate |
+| **Agent Observability** | `execution_trace_id` / `TRC-*` lineage + `m3_proof` provenance |
+
+---
+
+## Known gaps (disclosed for judges)
+
+- **Runtime Memory Bank:** ADR-009 deliberately keeps ChromaDB dev-only; the fleet's "persistent cross-session memory" is not in the runtime yet. Mitigated by durable artifact lineage + Notion grounding.
+- **Model Armor** is realized via in-code deterministic guardrails + bounded Gemini scope, not the managed Google Cloud Model Armor service (would be a post-M3 hardening step).
+- **Flat pipeline vs hierarchical execution:** The current implementation uses a linear execution pipeline (Workers → Managers) rather than true hierarchical multi-agent coordination. This is a known design debt documented here for transparency.
