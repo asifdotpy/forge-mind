@@ -551,6 +551,27 @@ class DocsDriftAndSpecWorker(Worker):
             "no doc drift claim (no scope signal)"
         ]
 
+    def _confidence(self, context: dict) -> float:
+        """Confidence derived from doc-drift evidence (``docs_summary``).
+
+        - no docs signal in context         -> 0.85 (neutral; nothing assessed)
+        - drift explicitly detected         -> 0.70 (docs out of sync with code)
+        - docs checked and verified clean   -> 0.90
+        - docs touched, no explicit verdict -> 0.80
+        """
+        value = context.get("confidence")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return max(0.0, min(1.0, float(value)))
+        drift = context.get("inputs", {}).get("docs_summary") or ""
+        if not drift:
+            return 0.85
+        lowered = drift.lower()
+        if "no drift" in lowered or "verified" in lowered:
+            return 0.90
+        if "drift" in lowered or "may need update" in lowered:
+            return 0.70
+        return 0.80
+
 
 class BuildLogAndFlakinessWorker(Worker):
     """Delivery domain: CI/CD builds and test flakiness (MVP)."""
@@ -651,6 +672,23 @@ class AlertStormClusteringWorker(Worker):
             return "unavailable"
         return None
 
+    def _confidence(self, context: dict) -> float:
+        """Confidence derived from alert evidence (ADR-013 aware).
+
+        - monitoring unavailable -> 0.0 (cannot assess; no confidence)
+        - queried and clean      -> 0.90 (high confidence in a clean state)
+        - alerts present         -> 0.9 - 0.1 per alert (floor 0.3)
+        """
+        value = context.get("confidence")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return max(0.0, min(1.0, float(value)))
+        if self._monitoring_unavailable(context):
+            return 0.0
+        alerts = context.get("inputs", {}).get("alert_signals") or []
+        if not alerts:
+            return 0.90
+        return max(0.3, 0.9 - len(alerts) * 0.1)
+
     def _risk_level(self, context: dict) -> str:
         value = context.get("risk_level")
         if value in ("low", "medium", "high", "critical"):
@@ -704,6 +742,23 @@ class TelemetryCorrelationWorker(Worker):
         if self._monitoring_unavailable(context):
             return "unavailable"
         return None
+
+    def _confidence(self, context: dict) -> float:
+        """Confidence derived from telemetry evidence (ADR-013 aware).
+
+        - monitoring unavailable  -> 0.0 (cannot assess; no confidence)
+        - queried and clean       -> 0.90 (high confidence in a clean state)
+        - telemetry signals found -> 0.9 - 0.1 per signal (floor 0.3)
+        """
+        value = context.get("confidence")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return max(0.0, min(1.0, float(value)))
+        if self._monitoring_unavailable(context):
+            return 0.0
+        signals = context.get("inputs", {}).get("telemetry_signals") or []
+        if not signals:
+            return 0.90
+        return max(0.3, 0.9 - len(signals) * 0.1)
 
     def _risk_level(self, context: dict) -> str:
         signals = context.get("inputs", {}).get("telemetry_signals") or []

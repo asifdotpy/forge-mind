@@ -252,3 +252,128 @@ def test_coordinator_rejects_worker_from_unselected_domain():
     assert [s["worker"] for s in outcome["shards"]] == ["pr-pre-flight-ast-worker"]
     assert "build-log-and-flakiness-worker" in outcome["errors"]
     assert "not selected for coverage" in outcome["errors"]["build-log-and-flakiness-worker"]
+
+
+# ---------------------------------------------------------------------------
+# Evidence-derived confidence (ADR-014 follow-up): the docs / alert / telemetry
+# workers no longer inherit the flat base 0.85 -- their confidence is derived
+# from the evidence their inputs actually carry.
+# ---------------------------------------------------------------------------
+
+
+def test_docs_drift_confidence_is_evidence_derived():
+    plan = _plan_for("FIXTURE-002-escalation.json")["coverage_plan"]
+    worker = DocsDriftAndSpecWorker()
+
+    # No docs signal in context -> neutral 0.85.
+    shard = worker.build_shard(plan, _context("code", confidence=None, inputs={}))
+    assert shard["confidence"] == 0.85
+
+    # Docs checked and verified clean -> 0.90.
+    shard = worker.build_shard(
+        plan,
+        _context(
+            "code",
+            confidence=None,
+            inputs={
+                "docs_summary": "GitBook verified: 3 doc page(s) checked, no drift detected"
+            },
+        ),
+    )
+    assert shard["confidence"] == 0.90
+
+    # Drift explicitly detected -> 0.70.
+    shard = worker.build_shard(
+        plan,
+        _context(
+            "code",
+            confidence=None,
+            inputs={
+                "docs_summary": "GitBook drift detected: 2 in-repo doc(s) changed "
+                "affecting 1 GitBook page(s)"
+            },
+        ),
+    )
+    assert shard["confidence"] == 0.70
+
+
+def test_alert_storm_confidence_is_evidence_derived():
+    plan = _plan_for("FIXTURE-002-escalation.json")["coverage_plan"]
+    worker = AlertStormClusteringWorker()
+
+    # Monitoring unavailable (ADR-013) -> zero confidence.
+    shard = worker.build_shard(
+        plan,
+        _context(
+            "delivery",
+            confidence=None,
+            inputs={"alert_signals": [], "monitoring_state": "unavailable"},
+        ),
+    )
+    assert shard["confidence"] == 0.0
+
+    # Queried and clean -> 0.90.
+    shard = worker.build_shard(
+        plan,
+        _context(
+            "delivery",
+            confidence=None,
+            inputs={"alert_signals": [], "monitoring_state": "ok"},
+        ),
+    )
+    assert shard["confidence"] == 0.90
+
+    # Alerts present -> scaled down (0.9 - 0.1 per alert, floor 0.3).
+    shard = worker.build_shard(
+        plan,
+        _context(
+            "delivery",
+            confidence=None,
+            inputs={
+                "alert_signals": ["alert-1", "alert-2", "alert-3"],
+                "monitoring_state": "ok",
+            },
+        ),
+    )
+    assert shard["confidence"] == pytest.approx(0.60)
+
+
+def test_telemetry_confidence_is_evidence_derived():
+    plan = _plan_for("FIXTURE-002-escalation.json")["coverage_plan"]
+    worker = TelemetryCorrelationWorker()
+
+    # Monitoring unavailable (ADR-013) -> zero confidence.
+    shard = worker.build_shard(
+        plan,
+        _context(
+            "production",
+            confidence=None,
+            inputs={"telemetry_signals": [], "monitoring_state": "unavailable"},
+        ),
+    )
+    assert shard["confidence"] == 0.0
+
+    # Queried and clean -> 0.90.
+    shard = worker.build_shard(
+        plan,
+        _context(
+            "production",
+            confidence=None,
+            inputs={"telemetry_signals": [], "monitoring_state": "ok"},
+        ),
+    )
+    assert shard["confidence"] == 0.90
+
+    # Signals present -> scaled down (0.9 - 0.1 per signal, floor 0.3).
+    shard = worker.build_shard(
+        plan,
+        _context(
+            "production",
+            confidence=None,
+            inputs={
+                "telemetry_signals": [1.2, 2.3],
+                "monitoring_state": "ok",
+            },
+        ),
+    )
+    assert shard["confidence"] == pytest.approx(0.70)

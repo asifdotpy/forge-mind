@@ -492,12 +492,14 @@ def _enrich_payload_sync(
     monitoring = _fetch_monitoring_signals_sync(repo, changed_files)
 
     # 6. Derive coverage domains from the changed files (ADR-014), extended by
-#    the evidence channels the payload actually carries:
-#      - ci_outcome present (pass/fail) -> delivery (build worker owns it)
-#      - monitoring state "ok"           -> delivery + production (alert/telemetry)
-#      - dependency_scan populated       -> production (security worker)
-#    This keeps coverage honest: a dimension we genuinely assessed is selected;
-#    a dimension with no data is not silently claimed.
+    #    the evidence channels the payload actually carries:
+    #      - ci_outcome present (pass/fail) -> delivery (build worker owns it)
+    #      - dependency_scan populated      -> production (security worker)
+    #    Domain selection stays classifier-derived (ADR-014 Decision 3): the
+    #    monitoring channel is queried for every PR (step 5), but it no longer
+    #    force-claims delivery/production.  When those domains ARE selected
+    #    the alert/telemetry workers report real data or honest UNAVAILABLE
+    #    (ADR-013); a docs-only PR no longer pretends to assess them.
     from forgemind.acquisition import (
         _CANONICAL_DOMAINS,
         classify_changed_files_domains,
@@ -506,18 +508,16 @@ def _enrich_payload_sync(
     domains = set(classify_changed_files_domains(changed_files))
     if ci_outcome and ci_outcome != "unknown":
         domains.add("delivery")
-    # The monitoring channel is always queried for a PR (enrichment step 5),
-    # so the operational-health dimension is always part of the situation:
-    #   - state "ok"         -> alert/telemetry workers report real data
-    #                           (NO_SIGNAL when genuinely clean);
-    #   - state "unavailable" -> they report UNAVAILABLE (ADR-013) and the
-    #                           reducer refuses autonomous action.
-    # This is the ADR-013/ADR-014 reconciliation: domain selection is no longer
-    # brute-forced (ADR-014), but a dimension the pipeline actually queried is
-    # always claimed, honestly -- including its inability to assess.  Skipping
-    # production when monitoring is down would make the cannot-assess gate
-    # (ADR-013 decision 4) unreachable from the webhook path.
-    domains.update(("delivery", "production"))
+    # The monitoring channel is queried for every PR (step 5).  Domains stay
+    # classifier-derived (ADR-014 Decision 3) -- but when monitoring could
+    # NOT be assessed, production is still claimed so the alert/telemetry
+    # workers run and emit honest UNAVAILABLE evidence.  This keeps the
+    # ADR-013 cannot-assess gate reachable from the webhook path (the
+    # ADR-014 queried-channel reconciliation): a monitoring outage must
+    # never silently raise confidence by deselecting the workers that would
+    # have reported it.
+    if monitoring.get("state") == "unavailable":
+        domains.add("production")
     if dependency_scan:
         domains.add("production")
     affected_domains = [d for d in _CANONICAL_DOMAINS if d in domains]

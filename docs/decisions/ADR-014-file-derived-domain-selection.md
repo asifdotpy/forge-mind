@@ -116,3 +116,36 @@ claiming domains with nothing behind them.  The reconciliation claims only
 channels that were genuinely queried and carries their status into the
 evidence model, so `missing_domains` stays meaningful and a monitoring
 outage can never silently *raise* confidence.
+
+## Amendment (2026-08-30, second): Classifier-Derived Selection Restored
+
+Follow-up evidence audit (`/home/asif1/tmp/CONFIDENCE_DOMAIN_FIX_PLAN.md`)
+found the first amendment over-corrected: `enrichment.py` still added
+`delivery` + `production` unconditionally after the classifier ran, so
+every webhook PR carried all three domains regardless of changeset or
+evidence (`README.md` -> `["code", "delivery", "production"]`).
+
+Decision (supersedes the first amendment's unconditional claim):
+
+1. `enrichment.py` no longer brute-forces `delivery`/`production`.
+   `affected_domains` = file classifier + genuinely-populated channels:
+   `ci_outcome` pass/fail -> `delivery`; populated `dependency_scan` ->
+   `production`.
+2. One narrow queried-channel claim is kept: when the monitoring query
+   **failed** (`monitoring_state == "unavailable"`), `production` is
+   still claimed so the alert/telemetry workers run and emit honest
+   `UNAVAILABLE` evidence.  Without it, an enrichment outage would
+   deselect the very workers that report it and the ADR-013 cannot-assess
+   gate becomes unreachable -- the exact dishonesty the first amendment
+   exists to prevent.  A monitoring-**ok** PR no longer claims
+   `delivery`/`production` it does not touch (`README.md` -> `["code"]`).
+3. Confidence is now evidence-derived end-to-end: the docs/alert/telemetry
+   workers override the flat base 0.85 (drift / alerts / telemetry signals
+   drive it; monitoring-unavailable -> 0.0), and `worker_contexts` forwards
+   `changed_files` to every worker that has its own payload key so the
+   base file-count confidence heuristic sees the real changeset.
+
+Verified: 281 passed, 1 skipped; black-box -- `ci.yml` ->
+`["code", "delivery"]`, `README.md` -> `["code"]`, `auth/token.py` ->
+`["code", "production"]`, offline -> `["code", "production"]` with
+`human_review`/`escalate` (never `safe_autonomous`).

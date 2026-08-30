@@ -72,6 +72,13 @@ def build_worker_contexts(event: dict, coverage_plan: dict) -> dict:
         if domain is None:  # defensive: canonical map is authoritative
             continue
         inputs = {key: payload[key]} if key in payload else {}
+        # Forward changed_files alongside the worker's own signal so
+        # confidence derivation that scales with the changeset surface (base
+        # Worker._confidence) computes evidence-based values.  Workers with
+        # no matching payload key are still omitted entirely -- changed_files
+        # alone never fabricates a context.
+        if "changed_files" in payload and key in payload:
+            inputs.setdefault("changed_files", payload["changed_files"])
         if worker_name in _MONITORING_AWARE_WORKERS and "monitoring_state" in payload:
             inputs["monitoring_state"] = payload["monitoring_state"]
         contexts[worker_name] = {

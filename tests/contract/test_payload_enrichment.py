@@ -409,10 +409,11 @@ def test_enrich_payload_offline_fallback_degrades_gracefully():
     """Total network failure degrades honestly (ADR-013/ADR-014).
 
     Nothing could be assessed: empty/unknown signals and
-    ``monitoring_state="unavailable"``.  All three channels were still
-    queried, so all three are claimed with their honest inability
-    (ADR-014 queried-channel amendment), and the pipeline must refuse
-    autonomous action via the cannot-assess gate (ADR-013 decision 4).
+    ``monitoring_state="unavailable"``.  Domains stay classifier-derived
+    (ADR-014 Decision 3), but production is still claimed because the
+    monitoring query failed, so the alert/telemetry workers emit honest
+    UNAVAILABLE evidence and the pipeline must refuse autonomous action via
+    the cannot-assess gate (ADR-013 decision 4).
     """
     client = MockGitHubClient(raise_on_files=True, raise_on_check_runs=True, raise_on_status=True)
 
@@ -431,9 +432,11 @@ def test_enrich_payload_offline_fallback_degrades_gracefully():
     assert payload["docs_summary"] == ""
     assert payload["dependency_scan"] == []
     assert payload["monitoring_state"] == "unavailable"
-    # Every channel was queried, so every channel is honestly claimed --
-    # including its inability to assess (ADR-014 amendment; ADR-013).
-    assert payload["affected_domains"] == ["code", "delivery", "production"]
+    # The failed monitoring query is still claimed (production) so the
+    # UNAVAILABLE evidence surfaces; delivery is not claimed because CI
+    # returned no verdict (ADR-014 Decision 3 + queried-channel
+    # reconciliation).
+    assert payload["affected_domains"] == ["code", "production"]
 
     # Cannot-assess gate: UNAVAILABLE monitoring must block autonomy.
     event = {
@@ -466,7 +469,9 @@ def test_enrich_payload_offline_fallback_degrades_gracefully():
     control = m3.get("human_control_state", {})
 
     assert control.get("autonomy_class") != "safe_autonomous"
-    assert control.get("autonomy_class") == "human_review"
+    # The zero-confidence UNAVAILABLE telemetry shard can drag the situation
+    # below the escalate threshold; both rungs refuse autonomy.
+    assert control.get("autonomy_class") in ("human_review", "escalate")
 
 
 def test_enrichment_caching_and_invalidation():
@@ -566,3 +571,73 @@ def test_fastapi_webhook_e2e_with_enrichment():
         assert "analysis_comment_posted" in data.get("actions_taken", [])
         assert "status_check_passed" in data.get("actions_taken", [])
         assert "actions_result" in data
+
+
+
+def test_enriched_domains_are_classifier_derived():
+    """ADR-014 Decision 3: affected_domains come from the file classifier
+    plus genuinely-populated evidence channels -- never a brute-forced triple."""
+    monitoring_ok = {"state": "ok", "alert_signals": [], "telemetry_signals": []}
+
+    # CI workflow file -> delivery via the classifier.
+    client = MockGitHubClient(
+        files=[{"filename": ".github/workflows/ci.yml"}],
+        check_runs=[],
+        commit_status={"state": "pending"},
+    )
+    with patch(
+        "forgemind.enrichment._fetch_monitoring_signals_sync",
+        return_value=dict(monitoring_ok),
+    ):
+        payload = asyncio.run(
+            enrich_payload(
+                repo="thevertexagents/vertex-sentinel",
+                pr_number=110,
+                sha="ciyml00001",
+                client=client,
+                use_cache=False,
+            )
+        )
+    assert payload["affected_domains"] == ["code", "delivery"]
+
+    # Docs-only PR -> code only; delivery/production are NOT brute-forced.
+    client = MockGitHubClient(
+        files=[{"filename": "README.md"}, {"filename": "docs/guide.md"}],
+        check_runs=[],
+        commit_status={"state": "pending"},
+    )
+    with patch(
+        "forgemind.enrichment._fetch_monitoring_signals_sync",
+        return_value=dict(monitoring_ok),
+    ):
+        payload = asyncio.run(
+            enrich_payload(
+                repo="thevertexagents/vertex-sentinel",
+                pr_number=111,
+                sha="d0cs0n1y11",
+                client=client,
+                use_cache=False,
+            )
+        )
+    assert payload["affected_domains"] == ["code"]
+
+    # Security-sensitive path -> production via the classifier.
+    client = MockGitHubClient(
+        files=[{"filename": "auth/token.py"}],
+        check_runs=[],
+        commit_status={"state": "pending"},
+    )
+    with patch(
+        "forgemind.enrichment._fetch_monitoring_signals_sync",
+        return_value=dict(monitoring_ok),
+    ):
+        payload = asyncio.run(
+            enrich_payload(
+                repo="thevertexagents/vertex-sentinel",
+                pr_number=112,
+                sha="auth0t0k31",
+                client=client,
+                use_cache=False,
+            )
+        )
+    assert payload["affected_domains"] == ["code", "production"]
