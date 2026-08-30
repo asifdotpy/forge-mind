@@ -242,7 +242,7 @@ def test_coordinator_dispatch_for_multi_domain_fixture():
 
 
 def test_coordinator_rejects_evidence_for_unselected_domain():
-    result = _dispatch_for("FIXTURE-001-happy-path.json")  # code only
+    result = _dispatch_for("FIXTURE-001-happy-path.json")  # code + production (ADR-014)
     shards = [
         _shard(
             "code",
@@ -251,7 +251,7 @@ def test_coordinator_rejects_evidence_for_unselected_domain():
             situation_id=result["event"]["situation_id"],
         ),
         _shard(
-            "production",
+            "delivery",
             suffix="1000",
             trace_id=result["execution_trace_id"],
             situation_id=result["event"]["situation_id"],
@@ -265,15 +265,17 @@ def test_coordinator_rejects_evidence_for_unselected_domain():
 
 
 # ---------------------------------------------------------------------------
-# Fixture dispatch matrix: FIXTURE-001 -> code; FIXTURE-002 -> all three.
+# Fixture dispatch matrix: FIXTURE-001 -> code + production (ADR-014: auth
+# files); FIXTURE-002 -> all three.
 # ---------------------------------------------------------------------------
 
 
 def test_fixture_001_dispatches_code_intelligence_manager():
     result = _dispatch_for("FIXTURE-001-happy-path.json")
-    assert result["coverage_plan"]["selected_domains"] == ["code"]
+    assert result["coverage_plan"]["selected_domains"] == ["code", "production"]
     assert result["supervisor_dispatch"]["selected_managers"] == [
         "code-intelligence-manager",
+        "production-health-manager",
     ]
 
 

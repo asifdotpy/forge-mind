@@ -59,7 +59,14 @@ class MonitoringSearchService:
             repo: Repository in 'owner/repo' format.
 
         Returns:
-            Dict with keys: alerts (list of strings), telemetry (list of floats).
+            Dict with keys: state ("ok" | "unavailable"), alerts (list of
+            strings), telemetry (list of floats).
+
+        Honesty contract (ADR-013): a real, successful query returns
+        state="ok" even when the result set is empty (absence of detected
+        incidents).  Any failure — ADK unavailable, unset credentials, query
+        error — returns state="unavailable" with empty lists, so callers can
+        distinguish "looked, was clean" from "could not be assessed".
         """
         try:
             from google.adk.agents import Agent
@@ -69,7 +76,7 @@ class MonitoringSearchService:
             from google.genai import types
         except ImportError:
             logger.debug("google.adk not available; ADK monitoring search disabled")
-            return {"alerts": [], "telemetry": []}
+            return {"state": "unavailable", "alerts": [], "telemetry": []}
 
         try:
             session_service = InMemorySessionService()
@@ -137,12 +144,19 @@ class MonitoringSearchService:
                                 result["alerts"] = [text.strip()]
 
             asyncio.run(run_search())
-            logger.debug("ADK monitoring search completed for %s: %d alerts", repo, len(result["alerts"]))
+            # Success path: even a zero-result query is a real assessment.
+            result["state"] = "ok"
+            logger.debug(
+                "ADK monitoring search completed for %s: %d alerts (state=%s)",
+                repo,
+                len(result["alerts"]),
+                result["state"],
+            )
             return result
 
         except Exception as exc:
             logger.debug("ADK monitoring search failed for %s: %s", repo, exc)
-            return {"alerts": [], "telemetry": []}
+            return {"state": "unavailable", "alerts": [], "telemetry": []}
 
 
 async def fetch_monitoring_signals(repo: str, changed_files: List[str]) -> Dict[str, List[Any]]:
@@ -153,12 +167,13 @@ async def fetch_monitoring_signals(repo: str, changed_files: List[str]) -> Dict[
         changed_files: List of changed filenames (unused for monitoring).
 
     Returns:
-        Dict with keys: alert_signals, telemetry_signals.
+        Dict with keys: state, alert_signals, telemetry_signals.
     """
     service = MonitoringSearchService()
     results = service.search_incidents(repo)
 
     return {
+        "state": results.get("state", "unavailable"),
         "alert_signals": results.get("alerts", []),
         "telemetry_signals": results.get("telemetry", []),
     }

@@ -405,7 +405,7 @@ def _fetch_gitbook_docs_summary_sync(
 
 # -- 5. Monitoring & Telemetry Evidence (ADK 2 Search) -----------------------
 
-def _fetch_monitoring_signals_sync(repo: str, changed_files: List[str]) -> Dict[str, List[Any]]:
+def _fetch_monitoring_signals_sync(repo: str, changed_files: List[str]) -> Dict[str, Any]:
     """Fetch monitoring signals via ADK 2 search agent.
 
     Uses Google ADK 2.0 with the google_search tool to find active
@@ -415,22 +415,41 @@ def _fetch_monitoring_signals_sync(repo: str, changed_files: List[str]) -> Dict[
     google_search is a model-grounding tool that requires a full LLM session.
 
     Returns:
-        Dict with keys: alert_signals, telemetry_signals.
+        Dict with keys: state ("ok" | "unavailable"), alert_signals,
+        telemetry_signals.
     """
     alert_signals: List[str] = []
     telemetry_signals: List[float] = []
+    state = "unavailable"
+    saw_error = False
 
     try:
-        from src.forgemind.monitoring_search import MonitoringSearchService
+        from forgemind.monitoring_search import MonitoringSearchService
 
         service = MonitoringSearchService(model="gemini-2.5-flash")
-        results = asyncio.run(service.search_incidents(repo))
+        # MonitoringSearchService.search_incidents is synchronous; call it
+        # directly.  (Wrapping it in asyncio.run() raises TypeError and would
+        # make every PR report state="unavailable".)
+        results = service.search_incidents(repo)
+        # Honors the ADR-013 status channel: "ok" even when results are empty.
+        # Fail-closed default: a malformed result is treated as unavailable.
+        state = results.get("state", "unavailable")
         alert_signals = results.get("alerts", [])
         telemetry_signals = results.get("telemetry", [])
+        saw_error = state != "ok"
     except Exception as exc:
         logger.debug("ADK monitoring search failed: %s", exc)
+        saw_error = True
+
+    if saw_error:
+        logger.debug(
+            "monitoring state=unavailable for %s (no source/credentials or "
+            "query error); alert/telemetry workers will emit UNAVAILABLE",
+            repo,
+        )
 
     return {
+        "state": state,
         "alert_signals": alert_signals,
         "telemetry_signals": telemetry_signals,
     }
@@ -468,8 +487,40 @@ def _enrich_payload_sync(
         site_id=gitbook_site_id,
     )
 
-    # 5. Query ADK 2 search for monitoring and incident signals
+    # 5. Query ADK 2 search for monitoring and incident signals.
+    #    Honest status channel (ADR-013): "ok" vs "unavailable".
     monitoring = _fetch_monitoring_signals_sync(repo, changed_files)
+
+    # 6. Derive coverage domains from the changed files (ADR-014), extended by
+#    the evidence channels the payload actually carries:
+#      - ci_outcome present (pass/fail) -> delivery (build worker owns it)
+#      - monitoring state "ok"           -> delivery + production (alert/telemetry)
+#      - dependency_scan populated       -> production (security worker)
+#    This keeps coverage honest: a dimension we genuinely assessed is selected;
+#    a dimension with no data is not silently claimed.
+    from forgemind.acquisition import (
+        _CANONICAL_DOMAINS,
+        classify_changed_files_domains,
+    )
+
+    domains = set(classify_changed_files_domains(changed_files))
+    if ci_outcome and ci_outcome != "unknown":
+        domains.add("delivery")
+    # The monitoring channel is always queried for a PR (enrichment step 5),
+    # so the operational-health dimension is always part of the situation:
+    #   - state "ok"         -> alert/telemetry workers report real data
+    #                           (NO_SIGNAL when genuinely clean);
+    #   - state "unavailable" -> they report UNAVAILABLE (ADR-013) and the
+    #                           reducer refuses autonomous action.
+    # This is the ADR-013/ADR-014 reconciliation: domain selection is no longer
+    # brute-forced (ADR-014), but a dimension the pipeline actually queried is
+    # always claimed, honestly -- including its inability to assess.  Skipping
+    # production when monitoring is down would make the cannot-assess gate
+    # (ADR-013 decision 4) unreachable from the webhook path.
+    domains.update(("delivery", "production"))
+    if dependency_scan:
+        domains.add("production")
+    affected_domains = [d for d in _CANONICAL_DOMAINS if d in domains]
 
     return {
         "changed_files": changed_files,
@@ -478,10 +529,11 @@ def _enrich_payload_sync(
         "dependency_scan": dependency_scan,
         "alert_signals": monitoring.get("alert_signals", []),
         "telemetry_signals": monitoring.get("telemetry_signals", []),
+        "monitoring_state": monitoring.get("state", "unavailable"),
         "repo": repo,
         "pr_number": pr_number,
         "sha": sha,
-        "affected_domains": ["code", "delivery", "production"],
+        "affected_domains": affected_domains,
     }
 
 
@@ -513,7 +565,8 @@ async def enrich_payload(
 
     Returns:
         Dict with keys: changed_files, ci_outcome, docs_summary, dependency_scan,
-        alert_signals, telemetry_signals, repo, pr_number, sha, affected_domains.
+        alert_signals, telemetry_signals, monitoring_state, repo, pr_number, sha,
+        affected_domains.
     """
     cache_key = (repo, sha)
     now = time.time()
@@ -544,10 +597,12 @@ async def enrich_payload(
             "dependency_scan": [],
             "alert_signals": [],
             "telemetry_signals": [],
+            "monitoring_state": "unavailable",
             "repo": repo,
             "pr_number": pr_number,
             "sha": sha,
-            "affected_domains": ["code", "delivery", "production"],
+            # No files were visible: only the default code domain is honest.
+            "affected_domains": ["code"],
         }
 
     if use_cache and sha:

@@ -112,19 +112,25 @@ def test_original_provenance_preserved_verbatim(acquired_001):
 # ---------------------------------------------------------------------------
 
 
-def test_pr_event_defaults_to_code_domain(acquired_001):
+def test_pr_event_domains_derived_from_changed_files(acquired_001):
+    """FIXTURE-001 touches auth/*.go files: ADR-014 file-derived selection
+    adds the production domain (auth changes must reach the security and
+    telemetry workers), not just the historical ``code`` default."""
     plan = acquired_001["coverage_plan"]
-    assert plan["selected_domains"] == ["code"]
-    assert plan["selected_managers"] == ["code-intelligence-manager"]
+    assert plan["selected_domains"] == ["code", "production"]
+    assert plan["selected_managers"] == [
+        "code-intelligence-manager",
+        "production-health-manager",
+    ]
     assert plan["selected_workers"] == [
         "pr-pre-flight-ast-worker",
         "docs-drift-and-spec-worker",
+        "telemetry-correlation-worker",
+        "security-and-dependency-worker",
     ]
     assert plan["excluded_workers"] == [
         "build-log-and-flakiness-worker",
         "alert-storm-clustering-worker",
-        "telemetry-correlation-worker",
-        "security-and-dependency-worker",
     ]
     assert plan["selection_rationale"], "rationale must document the derivation"
 

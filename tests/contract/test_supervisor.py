@@ -44,7 +44,11 @@ def test_fixture_001_supervisor_dispatches_code_manager(processed_001):
     dispatch = processed_001["supervisor_dispatch"]
     assert dispatch["artifact_type"] == "SupervisorDispatch"
     assert dispatch["dispatched"] is True
-    assert dispatch["selected_managers"] == ["code-intelligence-manager"]
+    # ADR-014: FIXTURE-001 touches auth/*.go, so production is selected too.
+    assert dispatch["selected_managers"] == [
+        "code-intelligence-manager",
+        "production-health-manager",
+    ]
 
 
 def test_fixture_002_supervisor_dispatches_all_three_managers():
@@ -164,9 +168,11 @@ def test_invalid_require_human_above_risk_level_is_rejected(processed_001):
 
 def test_min_domains_coverage_requirement_violation_raises(processed_001):
     plan = processed_001["coverage_plan"]
+    # ADR-014: FIXTURE-001 now selects two domains (code + production),
+    # so the violation requires min_domains above that.
     broken = {
         **plan,
-        "coverage_requirements": {"min_domains": 2, "max_domains": 3},
+        "coverage_requirements": {"min_domains": 3, "max_domains": 3},
     }
     with pytest.raises(SupervisorError, match="min_domains"):
         SUPERVISOR.dispatch(broken)

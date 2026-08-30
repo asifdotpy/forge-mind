@@ -242,8 +242,9 @@ def test_validator_error_on_invalid_finding():
 
 def test_finding_from_unselected_domain_raises():
     _event, _dispatch, plan = _plan_and_dispatch("FIXTURE-001-happy-path.json")
+    # ADR-014: FIXTURE-001 selects code + production; delivery is unselected.
     with pytest.raises(ValidatorError, match="did not select"):
-        VALIDATOR.validate(plan, [_finding(plan, "production", ["rogue claim"])])
+        VALIDATOR.validate(plan, [_finding(plan, "delivery", ["rogue claim"])])
 
 
 def test_validator_error_on_unsupported_causation():

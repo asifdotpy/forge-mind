@@ -7,7 +7,8 @@ Verifies:
 1. High-evidence clean PRs reach `safe_autonomous`.
 2. Failing CI PRs produce `human_review` or `escalate`.
 3. Dependency changes trigger structured security scan signals.
-4. Offline / network error fallbacks degrade gracefully without raising.
+4. Offline / network error fallbacks degrade gracefully and honestly:
+   empty/unknown signals plus ``monitoring_state="unavailable"`` (ADR-013).
 5. In-memory (repo, sha) caching and cache invalidation.
 6. End-to-end FastAPI webhook endpoint behavior.
 """
@@ -141,14 +142,24 @@ def test_enriched_payload_reaches_safe_autonomous():
         ],
     )
 
-    payload = asyncio.run(
-        enrich_payload(
-            repo="thevertexagents/vertex-sentinel",
-            pr_number=101,
-            sha="abc1234",
-            client=client,
+    # Deterministic monitoring stub (ADR-013): a real query returned
+    # "no incidents" -> state="ok", so alert/telemetry workers honestly
+    # report NO_SIGNAL and the clean PR can reach safe_autonomous.
+    def _monitoring_ok(repo, changed_files):
+        return {"state": "ok", "alert_signals": [], "telemetry_signals": []}
+
+    with patch(
+        "forgemind.enrichment._fetch_monitoring_signals_sync",
+        side_effect=_monitoring_ok,
+    ):
+        payload = asyncio.run(
+            enrich_payload(
+                repo="thevertexagents/vertex-sentinel",
+                pr_number=101,
+                sha="abc1234",
+                client=client,
+            )
         )
-    )
 
     event = {
         "event_id": "EVT-TEST-101",
@@ -194,16 +205,27 @@ def test_enrich_payload_failing_ci_triggers_human_review_or_escalation():
         ],
     )
 
-    payload = asyncio.run(
-        enrich_payload(
-            repo="thevertexagents/vertex-sentinel",
-            pr_number=102,
-            sha="fail1234",
-            client=client,
+    # Deterministic monitoring stub (ADR-013): the source could not be
+    # assessed -> alert/telemetry workers emit UNAVAILABLE, so the decision
+    # is blocked by the cannot-assess gate even before the failing-CI gate.
+    def _monitoring_unavailable(repo, changed_files):
+        return {"state": "unavailable", "alert_signals": [], "telemetry_signals": []}
+
+    with patch(
+        "forgemind.enrichment._fetch_monitoring_signals_sync",
+        side_effect=_monitoring_unavailable,
+    ):
+        payload = asyncio.run(
+            enrich_payload(
+                repo="thevertexagents/vertex-sentinel",
+                pr_number=102,
+                sha="fail1234",
+                client=client,
+            )
         )
-    )
 
     assert payload["ci_outcome"] == "fail"
+    assert payload["monitoring_state"] == "unavailable"
 
     event = {
         "event_id": "EVT-TEST-102",
@@ -279,15 +301,25 @@ def test_enrich_payload_advisory_detects_ghsa_vulnerability():
         check_runs=[{"name": "test", "status": "completed", "conclusion": "success"}],
     )
 
-    payload = asyncio.run(
-        enrich_payload(
-            repo="thevertexagents/vertex-sentinel",
-            pr_number=106,
-            sha="vuln123",
-            client=client,
-            use_cache=False,
+    # Deterministic monitoring stub (ADR-013): source unavailable -> the
+    # advisory PR is blocked by both the security finding and the
+    # cannot-assess gate.
+    def _monitoring_unavailable(repo, changed_files):
+        return {"state": "unavailable", "alert_signals": [], "telemetry_signals": []}
+
+    with patch(
+        "forgemind.enrichment._fetch_monitoring_signals_sync",
+        side_effect=_monitoring_unavailable,
+    ):
+        payload = asyncio.run(
+            enrich_payload(
+                repo="thevertexagents/vertex-sentinel",
+                pr_number=106,
+                sha="vuln123",
+                client=client,
+                use_cache=False,
+            )
         )
-    )
 
     assert any("GHSA-xxxx-yyyy" in s for s in payload["dependency_scan"])
 
@@ -374,7 +406,14 @@ def test_enrich_payload_no_docs_no_deps_produces_honest_no_signal():
 
 
 def test_enrich_payload_offline_fallback_degrades_gracefully():
-    """Network failure or unset credentials gracefully falls back to empty/unknown signals."""
+    """Total network failure degrades honestly (ADR-013/ADR-014).
+
+    Nothing could be assessed: empty/unknown signals and
+    ``monitoring_state="unavailable"``.  All three channels were still
+    queried, so all three are claimed with their honest inability
+    (ADR-014 queried-channel amendment), and the pipeline must refuse
+    autonomous action via the cannot-assess gate (ADR-013 decision 4).
+    """
     client = MockGitHubClient(raise_on_files=True, raise_on_check_runs=True, raise_on_status=True)
 
     payload = asyncio.run(
@@ -391,7 +430,43 @@ def test_enrich_payload_offline_fallback_degrades_gracefully():
     assert payload["ci_outcome"] == "unknown"
     assert payload["docs_summary"] == ""
     assert payload["dependency_scan"] == []
+    assert payload["monitoring_state"] == "unavailable"
+    # Every channel was queried, so every channel is honestly claimed --
+    # including its inability to assess (ADR-014 amendment; ADR-013).
     assert payload["affected_domains"] == ["code", "delivery", "production"]
+
+    # Cannot-assess gate: UNAVAILABLE monitoring must block autonomy.
+    event = {
+        "event_id": "EVT-TEST-104",
+        "situation_id": "SIT-TEST-104",
+        "timestamp": "2026-08-28T12:00:00Z",
+        "source": "github",
+        "type": "pr",
+        "summary": "Unassessable PR (enrichment network failure)",
+        "reference": "https://github.com/thevertexagents/vertex-sentinel/pull/104",
+        "affected_entities": ["thevertexagents/vertex-sentinel"],
+        "provenance": {"source_system": "github", "sender": "developer"},
+        "selected_domains": payload["affected_domains"],
+        "selected_workers": [
+            "pr-pre-flight-ast-worker",
+            "docs-drift-and-spec-worker",
+            "build-log-and-flakiness-worker",
+            "alert-storm-clustering-worker",
+            "telemetry-correlation-worker",
+            "security-and-dependency-worker",
+        ],
+        "require_human_above_risk_level": "critical",
+        "max_concurrent_managers": 3,
+        "global_timeout_seconds": 300,
+        "payload": payload,
+    }
+
+    result = run_adk_pipeline(EventInput(event=event))
+    m3 = result.get("m3_proof", {})
+    control = m3.get("human_control_state", {})
+
+    assert control.get("autonomy_class") != "safe_autonomous"
+    assert control.get("autonomy_class") == "human_review"
 
 
 def test_enrichment_caching_and_invalidation():
@@ -453,7 +528,11 @@ def test_fastapi_webhook_e2e_with_enrichment():
     # 2. Mock GitHub tools to test webhook flow
     with patch("forgemind.enrichment._get_client") as mock_client_factory, \
          patch("forgemind.tools.github_tools.post_comment") as mock_comment, \
-         patch("forgemind.tools.github_tools.update_status_check") as mock_status:
+         patch("forgemind.tools.github_tools.update_status_check") as mock_status, \
+         patch(
+             "forgemind.enrichment._fetch_monitoring_signals_sync",
+             return_value={"state": "ok", "alert_signals": [], "telemetry_signals": []},
+         ):
 
         mock_gh = MockGitHubClient(
             files=[{"filename": "README.md"}, {"filename": "docs/overview.md"}],

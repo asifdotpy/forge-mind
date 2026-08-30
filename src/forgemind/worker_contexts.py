@@ -56,6 +56,14 @@ def build_worker_contexts(event: dict, coverage_plan: dict) -> dict:
     payload = event.get("payload") or {}
     selected_workers = set(coverage_plan.get("selected_workers") or [])
 
+    #: Workers that consume the monitoring status channel (ADR-013).  When the
+    #: monitoring source is unavailable they must emit UNAVAILABLE evidence,
+    #: so ``monitoring_state`` is forwarded alongside their signal lists.
+    _MONITORING_AWARE_WORKERS = {
+        "alert-storm-clustering-worker",
+        "telemetry-correlation-worker",
+    }
+
     contexts: Dict[str, Any] = {}
     for key, worker_name in _PAYLOAD_KEY_TO_WORKER.items():
         if worker_name not in selected_workers:
@@ -63,8 +71,11 @@ def build_worker_contexts(event: dict, coverage_plan: dict) -> dict:
         domain = WORKER_NAMES_BY_DOMAIN.get(worker_name)
         if domain is None:  # defensive: canonical map is authoritative
             continue
+        inputs = {key: payload[key]} if key in payload else {}
+        if worker_name in _MONITORING_AWARE_WORKERS and "monitoring_state" in payload:
+            inputs["monitoring_state"] = payload["monitoring_state"]
         contexts[worker_name] = {
             "domain": domain,
-            "inputs": {key: payload[key]} if key in payload else {},
+            "inputs": inputs,
         }
     return contexts

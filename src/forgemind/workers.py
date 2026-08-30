@@ -283,6 +283,7 @@ class Worker(ABC):
         structured = []
         inputs = context.get("inputs", {}) or {}
         changed_files = inputs.get("changed_files") or []
+        override_state = self._evidence_state_override(context)
 
         for claim in claims:
             claim_text = str(claim)
@@ -290,7 +291,12 @@ class Worker(ABC):
 
             # Determine evidence state
             evidence_state = "observed"
-            if any(
+            if override_state is not None:
+                # Honest fail-closed override (ADR-013): a worker that cannot
+                # obtain evidence must not claim "no signal" (absence of
+                # capability is not absence of incidents).
+                evidence_state = override_state
+            elif any(
                 phrase in lowered
                 for phrase in (
                     "no signal",
@@ -391,6 +397,16 @@ class Worker(ABC):
     def _id_suffix(event_id: str) -> str:
         """Strip a canonical ``EVT-`` prefix (mirrors acquisition)."""
         return event_id[len("EVT-"):] if event_id.startswith("EVT-") else str(event_id)
+
+    def _evidence_state_override(self, context: dict) -> Optional[str]:
+        """Return an evidence-state override for every claim, or ``None``.
+
+        A worker that cannot obtain evidence (e.g. its monitoring source is
+        unavailable per ADR-013) may return ``unavailable`` here so its
+        structured claims are tagged ``UNAVAILABLE`` instead of ``no_signal``.
+        ``None`` means the default phrase-based detection decides.
+        """
+        return None
 
     def _validate_shard(self, shard: dict) -> None:
         """Re-validate the emitted shard against its canonical schema."""
@@ -607,15 +623,33 @@ class AlertStormClusteringWorker(Worker):
 
     def _observations(self, context: dict) -> list:
         alerts = context.get("inputs", {}).get("alert_signals") or []
+        if self._monitoring_unavailable(context):
+            return [
+                "monitoring source unavailable; alert assessment cannot be "
+                "performed (honest UNAVAILABLE, ADR-013)"
+            ]
         return [f"alert signal: {a}" for a in alerts] or [
             "no alert signals recorded in context"
         ]
 
     def _claims(self, context: dict) -> list:
         alerts = context.get("inputs", {}).get("alert_signals") or []
+        if self._monitoring_unavailable(context):
+            return [
+                "monitoring source unavailable; no alert assessment possible"
+            ]
         return [f"clustered {len(alerts)} alert signal(s)"] if alerts else [
             "no alert storm cluster claim (no signals)"
         ]
+
+    def _monitoring_unavailable(self, context: dict) -> bool:
+        """True when the monitoring source could not be assessed (ADR-013)."""
+        return context.get("inputs", {}).get("monitoring_state") == "unavailable"
+
+    def _evidence_state_override(self, context: dict) -> Optional[str]:
+        if self._monitoring_unavailable(context):
+            return "unavailable"
+        return None
 
     def _risk_level(self, context: dict) -> str:
         value = context.get("risk_level")
@@ -642,15 +676,34 @@ class TelemetryCorrelationWorker(Worker):
 
     def _observations(self, context: dict) -> list:
         signals = context.get("inputs", {}).get("telemetry_signals") or []
+        if self._monitoring_unavailable(context):
+            return [
+                "monitoring source unavailable; telemetry assessment cannot "
+                "be performed (honest UNAVAILABLE, ADR-013)"
+            ]
         return [f"telemetry signal: {s}" for s in signals] or [
             "no telemetry signals recorded in context"
         ]
 
     def _claims(self, context: dict) -> list:
         signals = context.get("inputs", {}).get("telemetry_signals") or []
+        if self._monitoring_unavailable(context):
+            return [
+                "monitoring source unavailable; no telemetry assessment "
+                "possible"
+            ]
         return [f"{len(signals)} telemetry signal(s) correlated"] if signals else [
             "no telemetry correlation claim (no signals)"
         ]
+
+    def _monitoring_unavailable(self, context: dict) -> bool:
+        """True when the monitoring source could not be assessed (ADR-013)."""
+        return context.get("inputs", {}).get("monitoring_state") == "unavailable"
+
+    def _evidence_state_override(self, context: dict) -> Optional[str]:
+        if self._monitoring_unavailable(context):
+            return "unavailable"
+        return None
 
     def _risk_level(self, context: dict) -> str:
         signals = context.get("inputs", {}).get("telemetry_signals") or []

@@ -938,8 +938,14 @@ class CrossLifecycleValidator:
 
         for finding in findings:
             for claim in finding.get("supported_claims", []):
-                lowered = claim.lower()
-                if any(
+                lowered = str(claim).lower()
+                if "unavailable" in lowered:
+                    # Honest fail-closed (ADR-013): a claim that records an
+                    # unassessable source is UNAVAILABLE, never NO_SIGNAL.
+                    # Checked first: "monitoring source unavailable; no alert
+                    # assessment possible" also contains no_signal phrases.
+                    states[EvidenceState.UNAVAILABLE.value] += 1
+                elif any(
                     phrase in lowered
                     for phrase in (
                         "no signal",
@@ -965,25 +971,60 @@ class CrossLifecycleValidator:
                     states[EvidenceState.OBSERVED.value] += 1
 
         for shard in shards:
-            for claim in shard.get("claims", []):
-                if isinstance(claim, dict):
-                    state = claim.get("evidence_state", EvidenceState.OBSERVED.value)
-                    if state in states:
-                        states[state] += 1
-                else:
-                    lowered = str(claim).lower()
-                    if any(
-                        phrase in lowered
-                        for phrase in (
-                            "no signal",
-                            "nothing found",
-                            "no evidence",
-                            "no claim",
+            structured = shard.get("structured_claims") or []
+            if structured:
+                # Authoritative typed channel: ``evidence_state`` travels on
+                # each structured claim (workers.py ``_build_structured_claims``,
+                # including the ADR-013 UNAVAILABLE override).  Counted instead
+                # of the parallel string claims to avoid double counting.
+                for claim in structured:
+                    if isinstance(claim, dict):
+                        state = claim.get(
+                            "evidence_state", EvidenceState.OBSERVED.value
                         )
-                    ):
-                        states[EvidenceState.NO_SIGNAL.value] += 1
+                        if state in states:
+                            states[state] += 1
+                    else:  # defensive: tolerate malformed entries
+                        lowered = str(claim).lower()
+                        if "unavailable" in lowered:
+                            states[EvidenceState.UNAVAILABLE.value] += 1
+                        elif any(
+                            phrase in lowered
+                            for phrase in (
+                                "no signal",
+                                "nothing found",
+                                "no evidence",
+                                "no claim",
+                            )
+                        ):
+                            states[EvidenceState.NO_SIGNAL.value] += 1
+                        else:
+                            states[EvidenceState.OBSERVED.value] += 1
+            else:
+                # String-only shards (legacy/manager-level): phrase heuristic.
+                for claim in shard.get("claims", []):
+                    if isinstance(claim, dict):
+                        state = claim.get(
+                            "evidence_state", EvidenceState.OBSERVED.value
+                        )
+                        if state in states:
+                            states[state] += 1
                     else:
-                        states[EvidenceState.OBSERVED.value] += 1
+                        lowered = str(claim).lower()
+                        if "unavailable" in lowered:
+                            states[EvidenceState.UNAVAILABLE.value] += 1
+                        elif any(
+                            phrase in lowered
+                            for phrase in (
+                                "no signal",
+                                "nothing found",
+                                "no evidence",
+                                "no claim",
+                            )
+                        ):
+                            states[EvidenceState.NO_SIGNAL.value] += 1
+                        else:
+                            states[EvidenceState.OBSERVED.value] += 1
 
         total = sum(states.values())
         dominant = (

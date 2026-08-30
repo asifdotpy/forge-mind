@@ -18,6 +18,8 @@ ADRs document significant architectural, technical, and structural decisions mad
 | [**ADR-010**](file:///home/asif1/forge-mind/docs/decisions/ADR-010-m3-ai-core-scope.md) | M3 AI Core Scope — Real Gemini 3.5 via Vertex AI inside bounded ADK 2 nodes | Accepted | Bounded Gemini 3.5 + ADK 2 workflow runtime |
 | [**ADR-011**](file:///home/asif1/forge-mind/docs/decisions/ADR-011-evidence-aware-decisioning.md) | Evidence-Aware Autonomous Decisioning | Accepted | No confidence upgrade on evidence state; risk-adaptive confidence |
 | [**ADR-012**](file:///home/asif1/forge-mind/docs/decisions/ADR-012-realworld-deployment-surroundings.md) | Real-World Deployment Surroundings (Connector Layer, CI/CD, Secret Manager) | Candidate (2026-08-28) | Connector isolation, auto-deploy, secret zero-trust |
+| [**ADR-013**](file:///home/asif1/forge-mind/docs/decisions/ADR-013-honest-monitoring-unavailable-state.md) | Honest Monitoring Unavailable State | Accepted (2026-08-30) | `UNAVAILABLE` ≠ `NO_SIGNAL`; cannot-assess human gate |
+| [**ADR-014**](file:///home/asif1/forge-mind/docs/decisions/ADR-014-file-derived-domain-selection.md) | File-Derived Domain Selection | Accepted (2026-08-30) | CoveragePlan domains derived from changed files + queried channels |
 
 ## ADR Template
 ```markdown

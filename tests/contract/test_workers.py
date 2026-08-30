@@ -240,15 +240,15 @@ def test_coordinator_dispatches_all_three_mvp_workers_concurrently():
 
 
 def test_coordinator_rejects_worker_from_unselected_domain():
-    plan = _plan_for("FIXTURE-001-happy-path.json")["coverage_plan"]  # code only
+    plan = _plan_for("FIXTURE-001-happy-path.json")["coverage_plan"]  # code + production (ADR-014)
     outcome = WorkerCoordinator().dispatch(
         plan,
         {
             "pr-pre-flight-ast-worker": {"domain": "code", "inputs": {}},
-            "telemetry-correlation-worker": {"domain": "production", "inputs": {}},
+            "build-log-and-flakiness-worker": {"domain": "delivery", "inputs": {}},
         },
     )
     # Only the selected-domain worker ran.
     assert [s["worker"] for s in outcome["shards"]] == ["pr-pre-flight-ast-worker"]
-    assert "telemetry-correlation-worker" in outcome["errors"]
-    assert "not selected for coverage" in outcome["errors"]["telemetry-correlation-worker"]
+    assert "build-log-and-flakiness-worker" in outcome["errors"]
+    assert "not selected for coverage" in outcome["errors"]["build-log-and-flakiness-worker"]

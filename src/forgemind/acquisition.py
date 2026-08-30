@@ -111,6 +111,93 @@ _ALL_WORKERS = tuple(
     worker for domain in _CANONICAL_DOMAINS for worker in _WORKERS_BY_DOMAIN[domain]
 )
 
+
+# ---------------------------------------------------------------------------
+# File-to-domain classification (ADR-014)
+# ---------------------------------------------------------------------------
+# A PR event's coverage domains are derived from the changed file paths.  This
+# is deterministic and replay-stable (no wall clock, no randomness).  The
+# ``code`` domain is always selected for a PR (the repository content changed);
+# ``delivery`` / ``production`` are added when the changeset touches paths that
+# clearly concern the delivery pipeline or security-sensitive boundaries.
+# Every non-matching path falls into the default ``code`` bucket.
+
+#: Path prefixes that clearly concern the delivery pipeline (CI/CD, deploy).
+_DELIVERY_PATH_PREFIXES = (
+    ".github/workflows/",
+    ".github/actions/",
+    ".circleci/",
+    ".buildkite/",
+    "buildkite/",
+    "deploy/",
+    "deployment/",
+    "docker/",
+    "infra/",
+)
+#: Exact filenames (case-insensitive) that concern the delivery pipeline.
+_DELIVERY_FILE_NAMES = (
+    "jenkinsfile",
+    ".travis.yml",
+    ".gitlab-ci.yml",
+    "azure-pipelines.yml",
+    "bitbucket-pipelines.yml",
+    "dockerfile",
+    "cloudbuild.yaml",
+)
+
+#: Path prefixes at the security-sensitive boundary (production concerns).
+_PRODUCTION_PATH_PREFIXES = (
+    "auth/",
+    "security/",
+    "secrets/",
+    ".ssh/",
+)
+#: Sensitive file extensions.
+_PRODUCTION_FILE_SUFFIXES = (
+    ".pem",
+    ".key",
+    ".p12",
+    ".jks",
+)
+
+
+def _is_delivery_path(filename: str) -> bool:
+    """True when ``filename`` clearly concerns the delivery pipeline."""
+    lower = filename.lower()
+    if any(lower.startswith(p) for p in _DELIVERY_PATH_PREFIXES):
+        return True
+    return lower in _DELIVERY_FILE_NAMES
+
+
+def _is_production_path(filename: str) -> bool:
+    """True when ``filename`` lives at a security-sensitive boundary."""
+    lower = filename.lower()
+    if any(lower.startswith(p) for p in _PRODUCTION_PATH_PREFIXES):
+        return True
+    if any(lower.endswith(s) for s in _PRODUCTION_FILE_SUFFIXES):
+        return True
+    return False
+
+
+def classify_changed_files_domains(changed_files) -> list:
+    """Derive the canonical ordered coverage domains for a PR changeset.
+
+    Args:
+        changed_files: iterable of changed filenames (strings).
+
+    Returns:
+        ``["code"]`` always, plus ``delivery`` / ``production`` when the
+        changeset touches matching paths.  Order follows
+        :data:`_CANONICAL_DOMAINS` (deterministic).
+    """
+    domains = {"code"}
+    for filename in changed_files or []:
+        if _is_delivery_path(filename):
+            domains.add("delivery")
+        if _is_production_path(filename):
+            domains.add("production")
+    return [d for d in _CANONICAL_DOMAINS if d in domains]
+
 #: Canonical downstream chain after CoveragePlan (data-model.md §1).
 _DOWNSTREAM_ARTIFACTS = (
     "EvidenceShard",
@@ -195,6 +282,17 @@ def _select_domains(event: dict):
                 "selected_domains taken from payload.affected_domains "
                 "(filtered to canonical domains)",
             ]
+    # PR events: derive coverage from the changed files (ADR-014).  A PR that
+    # touches CI/CD config selects delivery, security-sensitive paths select
+    # production, and everything else stays in the default code domain.
+    changed_files = payload.get("changed_files")
+    if event.get("type") == "pr" and isinstance(changed_files, list):
+        selected = classify_changed_files_domains(changed_files)
+        return selected, [
+            "selected_domains derived from changed_files "
+            f"({len(changed_files)} file(s)) via "
+            "classify_changed_files_domains (ADR-014)",
+        ]
     selected = [
         d
         for d in _CANONICAL_DOMAINS

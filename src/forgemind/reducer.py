@@ -48,6 +48,7 @@ from __future__ import annotations
 import jsonschema
 
 from forgemind.acquisition import load_schema
+from forgemind.validator import EvidenceState
 
 __all__ = [
     "AUTONOMOUS_CONFIDENCE",
@@ -198,6 +199,16 @@ class DecisionReducer:
         )
         claim_statuses = situation.get("claim_statuses", {}) or {}
 
+        # -- cannot-assess gating (ADR-013) ----------------------------------
+        # If any contributing claim is UNAVAILABLE (a monitoring/evidence source
+        # could not be assessed), the situation MUST NOT be decided autonomously:
+        # a dimension that cannot be assessed must not be assumed safe.
+        cannot_assess = bool(
+            (evidence_states.get("counts") or {}).get(
+                EvidenceState.UNAVAILABLE.value, 0
+            )
+        )
+
         # -- base confidence boost (preserves old behavior) ----------------
         # Reward well-evidenced situations: full coverage + established causality
         if not missing_domains and causality_status in _ESTABLISHED_CAUSALITY:
@@ -277,6 +288,11 @@ class DecisionReducer:
             reason = None
         elif not evidence_adequate:
             # Evidence strength insufficient for proposed action (Fix 3)
+            autonomy_class = "human_review"
+            reason = None
+        elif cannot_assess:
+            # An evidence dimension could not be assessed (ADR-013): never
+            # proceed autonomously on a situation with UNAVAILABLE evidence.
             autonomy_class = "human_review"
             reason = None
         elif has_high_critical_evidence:
