@@ -8,7 +8,7 @@ Demo/Production Readiness (30%).
 - Terminal with `PYTHONPATH=src` and `.venv` activated
 - Browser open to Cloud Run dashboard
 - `SUBMISSION/ARCHITECTURE.md` open in another tab
-- Real PR ready on GitHub (for webhook test)
+- Real PR ready on GitHub (PR #210, #204, #192, #195)
 
 ---
 
@@ -28,52 +28,57 @@ Demo/Production Readiness (30%).
   - Only the Reducer decides
   - The gate enforces no-bypass
 - Show the new `adk+runner` mode: "ADK agents now call tools that execute the deterministic tiers — the agent actually takes decisions."
+- **Architecture explanation:** "Our logical architecture is hierarchical: each Domain Manager owns two Specialist Workers. The current implementation uses a flat pipeline for simplicity — the pipeline dispatches workers first, then managers aggregate. The ownership hierarchy is preserved in the code: each Manager owns exactly 2 Workers. This is a known design debt we plan to address post-hackathon."
 
 ---
 
-## 1:30–2:30 — Autonomous action (utility pillar)
+## 1:30–2:30 — Real PR analysis (utility pillar)
 
-- Run `PYTHONPATH=src python scripts/run_fixture.py` → show all 7 fixtures, **0 errors**, full lineage.
-- Show different PRs producing different outcomes:
-  - CI files → domains `['code', 'delivery']` → `safe_autonomous`
-  - Docs → domains `['code']` → `human_review`
-  - Auth files → domains `['code', 'production']` → `human_review`
-- "Evidence-derived confidence — different PRs score differently."
-
----
-
-## 2:30–3:30 — Human control + ADK Runner (the differentiator)
-
-- Show `GET /` viewer: provenance chain, validation badge, uncertainty callouts, human-control banner.
-- Enable ADK Runner live:
+- **Trigger webhook for PR #210** (CI + Docs + Scripts):
   ```bash
-  export FORGEMIND_RUNTIME=adk+runner
+  curl -X POST $URL/api/v1/adk/webhook -d '{"action":"opened","number":210,...}'
   ```
-- Re-run a PR event → point at the ADK agents calling tools. "Real ADK 2.0 tool calling — the agent executes the five-tier DAG."
-- Force a `requires_human` case → show `status: paused` + approval token.
-- "High-blast-radius actions stop for a human. Autonomy proportional to risk."
+- Show the comment posted on GitHub: confidence 0.23, risk high, escalate
+- **Trigger webhook for PR #204** (Dependabot CI only):
+  ```bash
+  curl -X POST $URL/api/v1/adk/webhook -d '{"action":"opened","number":204,...}'
+  ```
+- Show different comment: confidence 0.18, risk high, escalate
+- **Compare both PRs**: "Different files → different confidence scores. Evidence-derived, not heuristic."
+
+---
+
+## 2:30–3:30 — Full dashboard view (the differentiator)
+
+- Open `https://forgemind-n3nupsii5a-uc.a.run.app/view/SIT-GITHUB-210`
+- Show the full M3 dashboard: evidence chain, uncertainty, analytics, human control
+- Point out: "This is not a hardcoded mockup. This is real data from a real GitHub PR."
+- Show PR #204 dashboard: different evidence states, different confidence
+- "Every PR gets its own unique dashboard URL linked from the comment."
 
 ---
 
 ## 3:30–4:00 — Production readiness + close
 
 - Show Cloud Run dashboard (proof it runs on Google Cloud).
-- `uv run pytest tests/` → **288 passed, 1 skipped**.
-- "Reproducible: clone, `uv sync`, `uv run pytest`. Deployed on Cloud Run. ForgeMind — autonomous, evidence-driven, human-aware."
+- `uv run pytest tests/` → **298 passed, 1 skipped**.
+- "Reproducible: clone, `uv sync`, `uv run pytest`. Deployed on Cloud Run."
+- "ForgeMind — autonomous, evidence-driven, human-aware."
 
 ---
 
 ## Tips
 
 - Keep it one unedited take. Show the terminal output, not a recap.
-- Have `FORGEMIND_RUNTIME=adk+runner` creds ready off-screen; fall back to deterministic if the network lags.
+- Have creds ready off-screen; fall back to deterministic if the network lags.
 - Show the real PR comment posted on GitHub as proof of action.
 
 ---
 
 **Key numbers to mention:**
-- 288 tests passed
+- 298 tests passed
 - 5-tier DAG
 - 6 specialist workers
 - 3 runtime modes (deterministic, adk, adk+runner)
 - File-derived domains + evidence-derived confidence
+- Real PRs: #210 (0.23), #204 (0.18), #192 (0.22), #195 (0.40)
