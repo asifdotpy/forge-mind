@@ -527,6 +527,11 @@ def register_adk_routes(app: FastAPI) -> None:
                     )
                 except Exception as storage_err:
                     logger.warning("SituationStore.save failed (expected on Cloud Run): %s", storage_err)
+                # Populate shared in-memory cache so the viewer can render
+                # the full M3 dashboard without SQLite (works on Cloud Run).
+                from forgemind.api.situation_cache import put
+
+                put(result.get("situation_id", f"SIT-GITHUB-{pr_number}"), result)
                 # Execute exactly the actions autonomy selected (comment for
                 # safe_autonomous + human_review; status check for autonomous).
                 result["actions_result"] = _execute_github_actions(event, result)

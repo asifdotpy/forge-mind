@@ -18,6 +18,7 @@ from forgemind.api.models import ApprovalDecision, EventInput
 from forgemind.api.pipeline import _fixture_body_for, run_pipeline
 from forgemind.api.routes import app, create_api
 from forgemind.api.adk_routes import register_adk_routes
+from forgemind.api import situation_cache
 
 __all__ = [
     "ApprovalDecision",
@@ -31,4 +32,5 @@ __all__ = [
     "create_api",
     "register_adk_routes",
     "run_pipeline",
+    "situation_cache",
 ]

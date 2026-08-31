@@ -20,6 +20,7 @@ from forgemind.adk_runtime import (
 )
 from forgemind.api.dashboard import DEFAULT_VIEWER_SITUATION_ID, _render_situation_html
 from forgemind.api.dashboard.helpers import _esc
+from forgemind.api.situation_cache import get as cache_get
 
 
 def _approval_page_html(token: str) -> str:
@@ -255,46 +256,39 @@ def create_api() -> FastAPI:
     @app.get("/view/{situation_id}", response_class=HTMLResponse)
     async def situation_viewer(situation_id: str = DEFAULT_VIEWER_SITUATION_ID):
         """Read-only, offline HTML viewer for the four M3 proof properties."""
-        # Try to load from SituationStore (works locally, not on Cloud Run)
+        # 1. Try in-memory cache first (webhook-generated situations, works on Cloud Run)
+        cached_result = cache_get(situation_id)
+        if cached_result is not None:
+            return HTMLResponse(content=_render_situation_html(cached_result))
+
+        # 2. Try to load from SituationStore / fixtures (works locally)
         try:
             request_body = _fixture_body_for(situation_id)
         except Exception:
             request_body = None
-        
-        if request_body is None:
-            # Cloud Run has read-only FS — SituationStore unavailable
-            # For webhook-generated situations, show a simple confirmation
-            if situation_id.startswith("SIT-GITHUB-"):
+
+        if request_body is not None:
+            try:
+                result = run_pipeline(request_body)
+            except (EventValidationError, *PIPELINE_ERRORS) as exc:
                 return HTMLResponse(
-                    status_code=200,
+                    status_code=500,
                     content=(
-                        "<!DOCTYPE html><html><head><title>ForgeMind Analysis</title></head><body>"
-                        f"<h1>✅ Situation Processed</h1>"
-                        f"<p><strong>Situation ID:</strong> {_esc(situation_id)}</p>"
-                        "<p>This situation was processed by ForgeMind and the analysis comment was posted on GitHub.</p>"
-                        "<p>For full details, view the comment on the pull request.</p>"
-                        "</body></html>"
+                        "<!DOCTYPE html><html><body><h1>Pipeline error</h1>"
+                        f"<p>{_esc(exc)}</p></body></html>"
                     ),
                 )
-            return HTMLResponse(
-                status_code=404,
-                content=(
-                    "<!DOCTYPE html><html><body><h1>Unknown situation</h1>"
-                    f"<p>No replayable event for {_esc(situation_id)}.</p>"
-                    "</body></html>"
-                ),
-            )
-        try:
-            result = run_pipeline(request_body)
-        except (EventValidationError, *PIPELINE_ERRORS) as exc:
-            return HTMLResponse(
-                status_code=500,
-                content=(
-                    "<!DOCTYPE html><html><body><h1>Pipeline error</h1>"
-                    f"<p>{_esc(exc)}</p></body></html>"
-                ),
-            )
-        return HTMLResponse(content=_render_situation_html(result))
+            return HTMLResponse(content=_render_situation_html(result))
+
+        # 3. Unknown situation
+        return HTMLResponse(
+            status_code=404,
+            content=(
+                "<!DOCTYPE html><html><body><h1>Unknown situation</h1>"
+                f"<p>No replayable event for {_esc(situation_id)}.</p>"
+                "</body></html>"
+            ),
+        )
 
     @app.get("/api/v1/specs")
     async def list_specs() -> Dict[str, Any]:
