@@ -26,6 +26,8 @@ Event Sources → Acquire Layer (Event Gateway)
 
 **Canonical runtime chain:** `Acquire → Analyze → Reconcile → Produce → Validate`
 
+![Five-Tier Runtime Flow](SUBMISSION/architecture_diagram.png)
+
 ## Features
 
 | Feature | Description |
@@ -53,13 +55,22 @@ PYTHONPATH=src uvicorn forgemind.api:create_api --factory --reload
 # open http://127.0.0.1:8000/  -> M3 judge-visible surface
 ```
 
+Full spin-up, AI-enablement, and Cloud Run deploy guide: [`SUBMISSION/SPINUP.md`](SUBMISSION/SPINUP.md)
+
 ## Live App
 
 **URL:** https://forgemind-n3nupsii5a-uc.a.run.app
 
-**Example dashboards:**
+**Always-on endpoints:**
+- **Judge dashboard:** https://forgemind-n3nupsii5a-uc.a.run.app/ — provenance, validation, uncertainty, and human control
+- **Health check:** https://forgemind-n3nupsii5a-uc.a.run.app/api/v1/health → `{"status":"ok","phases_complete":6}`
+- **Registered ADK agents:** https://forgemind-n3nupsii5a-uc.a.run.app/api/v1/adk/agents → 6 agents
+
+**PR analysis dashboards** (populated by real GitHub webhook events):
 - PR #210 (CI + Docs + Scripts): https://forgemind-n3nupsii5a-uc.a.run.app/view/SIT-GITHUB-210
 - PR #204 (Dependabot CI only): https://forgemind-n3nupsii5a-uc.a.run.app/view/SIT-GITHUB-204
+
+> **Note:** the Cloud Run situation store is ephemeral (scale-to-zero). If a PR dashboard is empty after a cold start, re-trigger it with the manual webhook test in the section below — the situation is rebuilt from the real PR payload.
 
 ## GitHub Webhook Setup
 
@@ -101,10 +112,10 @@ curl -X POST "https://forgemind-n3nupsii5a-uc.a.run.app/api/v1/adk/webhook" \
 | [`src/forgemind/`](src/forgemind/) | Importable package (tier implementations) |
 | [`specs/001-hierarchical-runtime-dag/`](specs/001-hierarchical-runtime-dag/) | Canonical spec: `spec.md`, `plan.md`, `tasks.md`, 9 JSON Schema contracts |
 | [`fixtures/`](fixtures/) | Phase 0 fixtures + expected assertions |
-| [`scripts/`](scripts/) | Fixture runner, boundary enforcement |
+| [`scripts/`](scripts/) | Fixture runner, boundary enforcement, knowledge-brain sync |
 | [`tests/`](tests/) | Contract + integration suites |
 | [`docs/`](docs/) | Project vision, architecture, current state, decisions (ADRs), failure log |
-| [`SUBMISSION/`](SUBMISSION/) | Hackathon artifacts: `ARCHITECTURE.md`, `SPINUP.md`, `DEMO_SCRIPT.md` |
+| [`SUBMISSION/`](SUBMISSION/) | Hackathon artifacts: `ARCHITECTURE.md`, `SPINUP.md`, `PROJECT_STORY.md`, `DEMO_SCRIPT.md`, `WRITEUP.md`, `CHECKLIST.md` |
 
 ## Documentation
 
@@ -133,7 +144,7 @@ curl -X POST "https://forgemind-n3nupsii5a-uc.a.run.app/api/v1/adk/webhook" \
 
 | Requirement | Status |
 |-------------|--------|
-| **Gemini 3.5+** | ✅ Gemini 3.5 Flash via Google AI Studio |
+| **Gemini 3.5+** | ✅ Gemini 3.5 Flash via Vertex AI (`google-genai`) |
 | **Google Agent Framework** | ✅ Google ADK 2.0 |
 | **Google Cloud Service** | ✅ Cloud Run |
 

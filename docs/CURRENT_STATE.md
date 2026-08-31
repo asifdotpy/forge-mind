@@ -2,7 +2,7 @@
 
 **Date**: 2026-08-30
 **Phase**: Phase 4 (SPEC-002) COMPLETE — acceptance test passes; ADR-012 authored; docs/status hygiene done
-**Status**: SPEC-001 COMPLETE (M1/M2/M3 done) · SPEC-002 Phase 0 (deploy) + Phase 4 (acceptance test) + Phase 5 (demo) complete; Phase 1–3 in progress (connector/CI/CD/secrets) · 288 passed, 1 skipped (live-token-gated) green (ADK 2.0 Runner tool integration + state-driven pipeline, 2026-08-30)
+**Status**: SPEC-001 COMPLETE (M1/M2/M3 done) · SPEC-002 Phase 0 (deploy) + Phase 4 (acceptance test) + Phase 5 (demo) complete; Phase 1–3 in progress (connector/CI/CD/secrets) · 298 passed, 1 skipped (live-token-gated) green (ADK 2.0 Runner tool integration + state-driven pipeline, 2026-08-30; suite count verified 2026-09-01)
 **Branch**: `main` → `origin/main` (github.com/asifdotpy/forge-mind, public)
 
 ---
@@ -12,9 +12,9 @@
 ForgeMind v3.0 Phase 6 (Tier 5 Decision Reducer + Action Validation + Escalation) is **complete** per `specs/001-hierarchical-runtime-dag/plan.md` Phase 6 exit criteria:
 
 - All 9 canonical JSON Schema contracts authored and validated
-- 6 fixtures with expected assertions authored and passing
+- 7 fixture groups with expected assertions authored and passing
 - `src/forgemind/` package importable
-- `pytest tests/` green (231 passed, 1 skipped — live-token-gated)
+- `pytest tests/` green (298 passed, 1 skipped — live-token-gated)
 - Phase 1 acquisition module (`src/forgemind/acquisition.py`) implements deterministic `Event → CoveragePlan` lineage prefix
 - Phase 2 supervisor module (`src/forgemind/supervisor.py`) implements `Event → CoveragePlan → SupervisorDispatch` trace with global constraint enforcement
 - Phase 3 domain managers (`src/forgemind/domain_managers.py`) implement bounded-domain aggregation: `Event → CoveragePlan → SupervisorDispatch → DomainFinding`

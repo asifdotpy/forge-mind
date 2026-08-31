@@ -26,7 +26,7 @@ Enterprise Fleet · **Deadline:** 2026-08-31 8:00pm EDT
       Cloud Run + Vertex AI logs, unedited run, `pytest` green
 
 ## Pre-submission verification (run locally)
-- [x] `uv run pytest tests/` → 231 passed, 1 skipped (live-token-gated)
+- [x] `uv run pytest tests/` → 298 passed, 1 skipped (live-token-gated)
 - [x] `PYTHONPATH=src uv run python scripts/run_fixture.py` → 0 errors
 - [x] `PYTHONPATH=src uv run pytest tests/acceptance/` → 5 passed (SPEC-002 Phase 4 gate)
 - [x] `GET /` viewer shows provenance / validation / uncertainty / human
@@ -42,4 +42,4 @@ Enterprise Fleet · **Deadline:** 2026-08-31 8:00pm EDT
 
 ## Status at commit time
 - M1 local slice ✅ · M2 Cloud Run ✅ · M3 judge surface + AI core ✅
-- ADR-001/008 fulfilled; 231 tests green (1 skipped live-token-gated); 9 ADRs; 6 fixtures.
+- ADR-001/008 fulfilled; 298 tests green (1 skipped live-token-gated); 14 ADRs; 7 fixtures.
