@@ -149,7 +149,7 @@ def _execute_github_actions(event: Dict[str, Any], result: Dict[str, Any]) -> Di
     exactly those actions so the envelope is not just decorative:
 
     - ``analysis_comment_posted``  -> post the analysis comment on the PR
-      (non-destructive; fires for both ``safe_autonomous`` and ``human_review``).
+      (non-destructive; fires for all autonomy classes including ``escalate``).
     - ``status_check_passed``      -> mark the head commit's ``forgemind``
       status ``success`` (autonomous only).
 
@@ -166,17 +166,16 @@ def _execute_github_actions(event: Dict[str, Any], result: Dict[str, Any]) -> Di
 
     executed: Dict[str, Any] = {}
 
-    if "analysis_comment_posted" in actions and repo and pr_number:
+    # Always post analysis comment (non-destructive, informative for all autonomy classes)
+    comment = (result or {}).get("analysis_comment") or ""
+    if comment and repo and pr_number:
         from forgemind.tools.github_tools import post_comment
 
-        comment = (result or {}).get("analysis_comment") or ""
-        if comment:
-            executed["analysis_comment_posted"] = post_comment(
-                repo=repo, pr_number=pr_number, body=comment
-            )
-        else:
-            executed["analysis_comment_posted"] = {"skipped": "no analysis_comment"}
+        executed["analysis_comment_posted"] = post_comment(
+            repo=repo, pr_number=pr_number, body=comment
+        )
 
+    # Status check only for autonomous actions
     if "status_check_passed" in actions and repo and sha:
         from forgemind.tools.github_tools import update_status_check
 
