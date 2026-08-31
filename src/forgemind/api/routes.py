@@ -255,7 +255,11 @@ def create_api() -> FastAPI:
     @app.get("/view/{situation_id}", response_class=HTMLResponse)
     async def situation_viewer(situation_id: str = DEFAULT_VIEWER_SITUATION_ID):
         """Read-only, offline HTML viewer for the four M3 proof properties."""
-        request_body = _fixture_body_for(situation_id)
+        try:
+            request_body = _fixture_body_for(situation_id)
+        except Exception:
+            # Cloud Run has read-only FS — SituationStore unavailable
+            request_body = None
         if request_body is None:
             return HTMLResponse(
                 status_code=404,
