@@ -519,12 +519,15 @@ def register_adk_routes(app: FastAPI) -> None:
             # Process the event
             result = await adk_ingest_event(AdkEventInput(event=event))
             if isinstance(result, dict):
-                # Store situation for dashboard viewing
-                SituationStore.save(
-                    situation_id=result.get("situation_id", f"SIT-GITHUB-{pr_number}"),
-                    event=event,
-                    result=result,
-                )
+                # Store situation for dashboard viewing (best-effort, Cloud Run has read-only FS)
+                try:
+                    SituationStore.save(
+                        situation_id=result.get("situation_id", f"SIT-GITHUB-{pr_number}"),
+                        event=event,
+                        result=result,
+                    )
+                except Exception as storage_err:
+                    logger.warning("SituationStore.save failed (expected on Cloud Run): %s", storage_err)
                 # Execute exactly the actions autonomy selected (comment for
                 # safe_autonomous + human_review; status check for autonomous).
                 result["actions_result"] = _execute_github_actions(event, result)
