@@ -7,11 +7,11 @@
 
 ## 0:00–0:30 — Introduction & problem
 
-> "Hey, I'm Asif Iqbal. I built ForgeMind.
+> "Hey — I'm Asif Iqbal. I built ForgeMind.
 >
-> AI writes code fast now — but review, validation, coordination? Still takes days. A PR sits waiting. A flaky build goes unnoticed. An incident happens and nobody connects it to the deploy from this morning.
+> Here's what bothers me. AI writes code fast now, right? But review, validation, coordination — still takes days. A PR just sits there waiting. A flaky build goes unnoticed. An incident happens and nobody connects it to the deploy from this morning.
 >
-> ForgeMind fixes that. It correlates signals across the lifecycle — and knows when to act versus when to ask a human."
+> ForgeMind fixes that. It's a control plane that correlates signals across the lifecycle — and knows when to act versus when to ask a human."
 
 ---
 
@@ -21,9 +21,9 @@
 
 > "Five tiers. Workers emit evidence. Managers aggregate. Validator reconciles. Reducer decides. Gate enforces — no bypass.
 >
-> ADK Runner mode — agents call tools that execute the tiers. The agent actually takes decisions.
+> We also have ADK Runner mode — the agent actually takes decisions by calling tools that execute each tier.
 >
-> Logical architecture is hierarchical — each Manager owns two Workers. Current implementation uses a flat pipeline for simplicity. Known design debt, post-hackathon fix."
+> Logically it's hierarchical — each Manager owns two Workers. Implementation uses a flat pipeline right now for simplicity. Design debt — we'll fix it post-hackathon."
 
 ---
 
@@ -31,21 +31,23 @@
 
 **[Show PR #210 on GitHub]**
 
-> "PR #210 — CI, docs, and a Python script. Triggering webhook manually."
+> "Let me show you. PR #210 — touches CI workflows, docs, and a Python script.
+>
+> I'll trigger the webhook manually. In production, GitHub webhooks do this automatically."
 
 **[Run PR #210 command from DEMO_COMMANDS.md]**
 
-> "Sent. Refreshing the PR."
+> "Sent. Let me refresh."
 
 **[Show GitHub PR #210 — comment posted]**
 
-> "There's the comment. Confidence: 0.23. Risk: high. Escalate. And this link — every PR gets its own dashboard.
+> "There's the comment. Confidence 0.23, risk high, escalate. And this link — every PR gets its own dashboard.
 >
-> PR #204 — dependabot CI bump. Two YAML files."
+> Now PR #204 — just a dependabot CI bump. Two YAML files."
 
 **[Run PR #204 command from DEMO_COMMANDS.md]**
 
-> "Confidence: 0.18. Different files, different scores. Evidence-derived."
+> "Confidence 0.18. Different files, different scores. That's evidence-derived — not heuristic."
 
 ---
 
@@ -53,11 +55,11 @@
 
 **[Open /view/SIT-GITHUB-210 in browser]**
 
-> "Clicking the link."
+> "Let me click that link."
 
 **[Show full dashboard]**
 
-> "Not a hardcoded mockup. Real data from that PR. Evidence chain, provenance, uncertainty, human control. All generated from actual artifacts."
+> "Not a hardcoded mockup. Real data from that PR — evidence chain, provenance, uncertainty, human control. All generated from actual artifacts."
 
 **[Open /view/SIT-GITHUB-204]**
 
@@ -73,7 +75,9 @@
 
 **[Run test suite from DEMO_COMMANDS.md]**
 
-> "298 tests passed. Clone, `uv sync`, `uv run pytest`. That's it.
+> "298 tests passed.
+>
+> Clone, `uv sync`, `uv run pytest`. That's it.
 >
 > ForgeMind — autonomous, evidence-driven, human-aware."
 
