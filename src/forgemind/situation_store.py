@@ -35,11 +35,14 @@ or Firestore options. For the hackathon demo, SQLite is sufficient.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
 import threading
 import time
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 from forgemind.api.models import EventInput
 
@@ -91,14 +94,24 @@ class SituationStore:
 
     @classmethod
     def _db(cls) -> sqlite3.Connection:
-        """Return a thread-local SQLite connection and ensure schema exists."""
-        conn = sqlite3.connect(cls._resolve_db_path(), timeout=10)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL;")
-        if not cls._db_ready:
-            cls._init_schema(conn)
-            cls._db_ready = True
-        return conn
+        """Return a thread-local SQLite connection and ensure schema exists.
+
+        On Cloud Run (read-only FS), SQLite may fail. In that case, fall
+        back to in-memory store for the lifetime of the process.
+        """
+        try:
+            conn = sqlite3.connect(cls._resolve_db_path(), timeout=10)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL;")
+            if not cls._db_ready:
+                cls._init_schema(conn)
+                cls._db_ready = True
+            return conn
+        except sqlite3.OperationalError:
+            # Cloud Run has read-only FS — fall back to in-memory
+            logger.warning("SQLite unavailable (read-only FS), using in-memory store")
+            cls._use_memory = True
+            return None  # type: ignore[return-value]
 
     @classmethod
     def _init_schema(cls, conn: sqlite3.Connection) -> None:
@@ -145,13 +158,7 @@ class SituationStore:
     # ------------------------------------------------------------------
     @classmethod
     def save(cls, situation_id: str, event: Dict, result: Dict) -> None:
-        """Store situation data.
-
-        Args:
-            situation_id: Unique situation identifier.
-            event: The event dict that triggered the situation.
-            result: The pipeline result dict.
-        """
+        """Store situation data."""
         with cls._lock:
             if cls._use_memory:
                 cls._mem_evict_expired()
@@ -163,8 +170,12 @@ class SituationStore:
                 }
                 return
 
-            conn = cls._db()
             try:
+                conn = cls._db()
+                if conn is None:
+                    # Cloud Run read-only FS — fall back to memory
+                    cls._use_memory = True
+                    return
                 cls._evict_expired(conn)
                 cls._evict_overflow(conn)
                 conn.execute(
@@ -185,18 +196,12 @@ class SituationStore:
                 )
                 conn.commit()
             finally:
-                conn.close()
+                if conn:
+                    conn.close()
 
     @classmethod
     def get(cls, situation_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve situation data.
-
-        Args:
-            situation_id: Unique situation identifier.
-
-        Returns:
-            Dict with event, result, stored_at. None if not found or expired.
-        """
+        """Retrieve situation data."""
         with cls._lock:
             if cls._use_memory:
                 data = cls._mem_store.get(situation_id)
@@ -207,8 +212,11 @@ class SituationStore:
                     return None
                 return data
 
-            conn = cls._db()
             try:
+                conn = cls._db()
+                if conn is None:
+                    # Cloud Run read-only FS
+                    return None
                 row = conn.execute(
                     "SELECT event, result, stored_at FROM situations "
                     "WHERE situation_id = ?",
@@ -230,7 +238,8 @@ class SituationStore:
                     "stored_at": stored_at,
                 }
             finally:
-                conn.close()
+                if conn:
+                    conn.close()
 
     @classmethod
     def get_event(cls, situation_id: str) -> Optional[EventInput]:
