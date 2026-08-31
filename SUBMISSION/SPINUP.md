@@ -1,19 +1,17 @@
 # ForgeMind v3.0 — Spin-Up & Reproduction Guide
 
-This guide proves the project is reproducible locally and deployable to Google
-Cloud, satisfying the hackathon "reproducible setup" requirement.
+This guide proves the project is reproducible locally and deployable to Google Cloud, satisfying the hackathon "reproducible setup" requirement.
 
 ## Prerequisites
 - Python ≥ 3.11, `uv` (https://docs.astral.sh/uv/)
-- (Optional, for the live AI path) a Google Cloud project with Vertex AI
-  enabled and `google-genai` credentials (see "Enable the AI core" below).
+- (Optional, for the live AI path) a Google Cloud project with Vertex AI enabled and `google-genai` credentials (see "Enable the AI core" below).
 
 ## 1. Local — deterministic (default, no credentials)
 ```bash
 git clone https://github.com/asifdotpy/forge-mind.git
 cd forge-mind
 uv sync                      # installs runtime + dev deps (incl. google-genai)
-uv run pytest tests/         # 231 passed, 1 skipped (live-token-gated)
+uv run pytest tests/         # 298 passed, 1 skipped (live-token-gated)
 
 # Black-box fixture run (all 7 fixtures, 0 errors)
 PYTHONPATH=src uv run python scripts/run_fixture.py
@@ -37,13 +35,11 @@ curl -X POST http://127.0.0.1:8000/api/v1/events \
   -d @fixtures/inputs/FIXTURE-001-happy-path.json
 # response includes m3_proof + (with creds) Gemini-backed worker observations
 ```
-- `FORGEMIND_RUNTIME` unset or `deterministic` → existing deterministic
-  pipeline (231 tests stay green, no GenAI import at runtime).
+- `FORGEMIND_RUNTIME` unset or `deterministic` → existing deterministic pipeline (298 tests stay green, no GenAI import at runtime).
 - Only `FORGEMIND_RUNTIME=adk` activates the ADK workflow + human-approval gate.
 
 ## 3. Deploy to Google Cloud (M2 — Cloud Run)
-The repo already deployed `forgemind-v3-prod` (us-central1). To redeploy with
-the M3-B AI core:
+The repo already deployed `forgemind-v3-prod` (us-central1). To redeploy with the M3-B AI core:
 ```bash
 # 1) Ensure google-genai is in the image. It is already a [project].dependency
 #    and pinned in uv.lock, so `uv sync --frozen --no-dev` in the Dockerfile
@@ -61,12 +57,56 @@ gcloud run deploy forgemind-v3-prod \
 ```
 Full scripts: `deploy/cloudbuild.yaml`, `deploy/deploy.sh`.
 
-## 4. Verify the judge surface
+## 4. GitHub Webhook Setup (for live PR analysis)
+
+To enable automatic PR analysis:
+
+1. Go to your GitHub repository → Settings → Webhooks → Add webhook
+2. Payload URL: `https://forgemind-n3nupsii5a-uc.a.run.app/api/v1/adk/webhook`
+3. Content type: `application/json`
+4. Secret: (optional, recommended)
+5. Events: Select "Pull requests"
+6. Active: ✓
+
+Now every PR opened in your repository will automatically trigger ForgeMind's analysis and post a structured comment.
+
+### Manual webhook test (without GitHub App):
+```bash
+export URL=https://forgemind-n3nupsii5a-uc.a.run.app
+
+curl -X POST "$URL/api/v1/adk/webhook" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "action": "opened",
+    "number": 210,
+    "pull_request": {
+      "number": 210,
+      "title": "Your PR title",
+      "created_at": "2026-08-30T10:00:00Z",
+      "head": {"sha": "abc123..."},
+      "html_url": "https://github.com/your-org/your-repo/pull/210",
+      "state": "open"
+    },
+    "repository": {"full_name": "your-org/your-repo"},
+    "sender": {"login": "your-username"}
+  }'
+```
+
+## 5. Verify the judge surface
 - `GET /api/v1/situations/{situation_id}` → the four M3 proof blocks.
-- `GET /` → HTML viewer showing provenance, validation, uncertainty,
-  human-control for the default situation.
+- `GET /` → HTML viewer showing provenance, validation, uncertainty, human-control for the default situation.
+- `GET /view/SIT-GITHUB-210` → full M3 dashboard for a specific situation (real data from webhook).
+
+## 6. Try it live
+
+**Live App:** https://forgemind-n3nupsii5a-uc.a.run.app
+
+**Example dashboards:**
+- PR #210 (CI + Docs + Scripts): https://forgemind-n3nupsii5a-uc.a.run.app/view/SIT-GITHUB-210
+- PR #204 (Dependabot CI only): https://forgemind-n3nupsii5a-uc.a.run.app/view/SIT-GITHUB-204
+
+**Note:** ForgeMind requires GitHub webhook integration to analyze PRs. See step 5 for setup instructions.
 
 ## Security notes
-- No secrets are committed; `ggshield` pre-commit + `tests/test_secret_handling.py`
-  guard the repo.
+- No secrets are committed; `ggshield` pre-commit + `tests/test_secret_handling.py` guard the repo.
 - ChromaDB is dev-only (ADR-009) and absent from the production image.

@@ -2,7 +2,7 @@
 
 > **ForgeMind is an autonomous engineering control plane where specialized agents share context, understand relationships across the software lifecycle, reduce operational friction, and know when to act — and when to ask a human.**
 
-**Status:** 🟢 SPEC-001 Complete — Five-Tier Runtime + M3 Judge Surface Implemented (Phases 1-6, M1/M2/M3 done, 231 passed + 1 skipped, real Gemini 3.5 via Vertex AI + ADK 2)
+**Status:** 🟢 SPEC-001 Complete — Five-Tier Runtime + M3 Judge Surface Implemented (Phases 1-6, M1/M2/M3 done, 298 passed + 1 skipped, real Gemini 3.5 via Vertex AI + ADK 2)
 
 ## What ForgeMind Is
 
@@ -26,13 +26,14 @@ Canonical runtime chain: `Acquire → Analyze → Reconcile → Produce → Vali
 ## Repository Layout
 
 | Path | Purpose |
-|---|---|
+|------|---------|
 | [`src/forgemind/`](src/forgemind/) | Importable package (tier implementations land phase by phase) |
 | [`specs/001-hierarchical-runtime-dag/`](specs/001-hierarchical-runtime-dag/) | Canonical spec: `spec.md`, `plan.md`, `tasks.md`, `data-model.md`, 9 JSON Schema contracts |
 | [`fixtures/`](fixtures/) | Phase 0 fixtures (`FIXTURE-001-happy-path.json`, `FIXTURE-002-escalation.json`) + expected assertions |
 | [`scripts/`](scripts/) | Fixture runner, Notion knowledge-brain sync, boundary enforcement |
 | [`tests/`](tests/) | Contract + integration suites |
 | [`docs/`](docs/) | Project vision, architecture, current state, decisions (ADRs), failure log |
+| [`SUBMISSION/`](SUBMISSION/) | Hackathon artifacts: `ARCHITECTURE.md` (diagram), `SPINUP.md` (reproducible setup), `DEMO_SCRIPT.md`, `WRITEUP.md`, `CHECKLIST.md` |
 
 ## Documentation
 
@@ -48,10 +49,55 @@ Canonical runtime chain: `Acquire → Analyze → Reconcile → Produce → Vali
 ```bash
 # Requires Python >= 3.11 and uv
 uv sync                      # install dependencies (incl. dev group)
-uv run pytest tests/         # run the test suite
+uv run pytest tests/         # run the test suite (298 passed, 1 skipped)
 
 # Validate a fixture end-to-end (Event schema + expected-artifact coverage)
 PYTHONPATH=src python scripts/run_fixture.py fixtures/inputs/FIXTURE-001-happy-path.json
+
+# Run the API locally
+PYTHONPATH=src uvicorn forgemind.api:create_api --factory --reload
+# open http://127.0.0.1:8000/  -> M3 judge-visible surface
+```
+
+## Live App
+
+**URL:** https://forgemind-n3nupsii5a-uc.a.run.app
+
+**Example dashboards:**
+- PR #210 (CI + Docs + Scripts): https://forgemind-n3nupsii5a-uc.a.run.app/view/SIT-GITHUB-210
+- PR #204 (Dependabot CI only): https://forgemind-n3nupsii5a-uc.a.run.app/view/SIT-GITHUB-204
+
+## GitHub Webhook Setup
+
+ForgeMind analyzes PRs automatically via GitHub webhook.
+
+### Quick setup:
+1. Go to your GitHub repository → Settings → Webhooks → Add webhook
+2. Payload URL: `https://forgemind-n3nupsii5a-uc.a.run.app/api/v1/adk/webhook`
+3. Content type: `application/json`
+4. Events: Select "Pull requests"
+5. Active: ✓
+
+Every PR opened will trigger ForgeMind's analysis and post a structured comment.
+
+### Manual test:
+```bash
+curl -X POST "https://forgemind-n3nupsii5a-uc.a.run.app/api/v1/adk/webhook" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "action": "opened",
+    "number": 210,
+    "pull_request": {
+      "number": 210,
+      "title": "Your PR title",
+      "created_at": "2026-08-30T10:00:00Z",
+      "head": {"sha": "abc123..."},
+      "html_url": "https://github.com/your-org/your-repo/pull/210",
+      "state": "open"
+    },
+    "repository": {"full_name": "your-org/your-repo"},
+    "sender": {"login": "your-username"}
+  }'
 ```
 
 ## Technology Baseline
