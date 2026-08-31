@@ -255,12 +255,27 @@ def create_api() -> FastAPI:
     @app.get("/view/{situation_id}", response_class=HTMLResponse)
     async def situation_viewer(situation_id: str = DEFAULT_VIEWER_SITUATION_ID):
         """Read-only, offline HTML viewer for the four M3 proof properties."""
+        # Try to load from SituationStore (works locally, not on Cloud Run)
         try:
             request_body = _fixture_body_for(situation_id)
         except Exception:
-            # Cloud Run has read-only FS — SituationStore unavailable
             request_body = None
+        
         if request_body is None:
+            # Cloud Run has read-only FS — SituationStore unavailable
+            # For webhook-generated situations, show a simple confirmation
+            if situation_id.startswith("SIT-GITHUB-"):
+                return HTMLResponse(
+                    status_code=200,
+                    content=(
+                        "<!DOCTYPE html><html><head><title>ForgeMind Analysis</title></head><body>"
+                        f"<h1>✅ Situation Processed</h1>"
+                        f"<p><strong>Situation ID:</strong> {_esc(situation_id)}</p>"
+                        "<p>This situation was processed by ForgeMind and the analysis comment was posted on GitHub.</p>"
+                        "<p>For full details, view the comment on the pull request.</p>"
+                        "</body></html>"
+                    ),
+                )
             return HTMLResponse(
                 status_code=404,
                 content=(
